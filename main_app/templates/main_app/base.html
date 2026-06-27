@@ -12,7 +12,7 @@
     <link rel="shortcut icon" href="{% static '/image/favicon1.ico' %}">
     
     <!-- ERPNext Style CSS -->
-    <link rel="stylesheet" href="{% static 'dist/css/erpnext-style.css' %}">
+    <link rel="stylesheet" href="{% static 'dist/css/erpnext-style.css' %}?v={% now 'U' %}">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="{% static 'plugins/fontawesome-free/css/all.min.css' %}">
@@ -26,7 +26,11 @@
     {% block custom_css %}{% endblock custom_css %}
 </head>
 
-<body>
+<body class="{% if user.user_type == '1' %}admin-bg glass-theme{% elif user.user_type == '2' %}staff-bg glass-theme{% elif user.user_type == '3' %}student-bg glass-theme{% endif %}">
+    {% if user.user_type == '1' or user.user_type == '2' or user.user_type == '3' %}
+    <!-- Vanta animated background (admin: waves, staff: globe, student: birds) -->
+    <div class="vanta-bg"></div>
+    {% endif %}
     <!-- Navigation Bar -->
     <nav class="erpnext-navbar">
         <div class="navbar-left">
@@ -294,7 +298,8 @@
             // Function to update chart colors based on theme
             function updateChartColors() {
                 if (typeof Chart !== 'undefined') {
-                    const isDarkMode = body.classList.contains('dark-mode');
+                    // glass-theme (admin/staff) uses light chart text like dark mode
+                    const isDarkMode = body.classList.contains('dark-mode') || body.classList.contains('glass-theme');
                     const textColor = isDarkMode ? '#e0e0e0' : '#262626';
                     const gridColor = isDarkMode ? '#404040' : '#f1f3f4';
                     
@@ -480,6 +485,90 @@
         });
     </script>
     
+    {% if user.user_type == '1' %}
+    <!-- Vanta WAVES background (admin only) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.waves.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.VANTA) {
+                window.VANTA.WAVES({
+                    el: '.vanta-bg',
+                    mouseControls: true,
+                    touchControls: true,
+                    gyroControls: false,
+                    minHeight: 200.00,
+                    minWidth: 200.00,
+                    scale: 1.00,
+                    scaleMobile: 1.00,
+                    color: 0x005588,
+                    shininess: 30.00,
+                    waveHeight: 15.00,
+                    waveSpeed: 1.00,
+                    zoom: 0.95
+                });
+            }
+        });
+    </script>
+    {% endif %}
+
+    {% if user.user_type == '2' %}
+    <!-- Vanta GLOBE background (staff only) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.globe.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.VANTA) {
+                window.VANTA.GLOBE({
+                    el: '.vanta-bg',
+                    mouseControls: true,
+                    touchControls: true,
+                    gyroControls: false,
+                    minHeight: 200.00,
+                    minWidth: 200.00,
+                    scale: 1.00,
+                    scaleMobile: 1.00,
+                    color: 0x3fa9ff,
+                    color2: 0xffffff,
+                    backgroundColor: 0x12243a
+                });
+            }
+        });
+    </script>
+    {% endif %}
+
+    {% if user.user_type == '3' %}
+    <!-- Vanta BIRDS background (student only) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.birds.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.VANTA) {
+                window.VANTA.BIRDS({
+                    el: '.vanta-bg',
+                    mouseControls: true,
+                    touchControls: true,
+                    gyroControls: false,
+                    minHeight: 200.00,
+                    minWidth: 200.00,
+                    scale: 1.00,
+                    scaleMobile: 1.00,
+                    backgroundColor: 0x12243a,
+                    color1: 0x3fa9ff,
+                    color2: 0xff6f61,
+                    birdSize: 1.20,
+                    wingSpan: 25.00,
+                    speedLimit: 5.00,
+                    separation: 30.00,
+                    alignment: 25.00,
+                    cohesion: 25.00,
+                    quantity: 3.00
+                });
+            }
+        });
+    </script>
+    {% endif %}
+
     {% block custom_js %}{% endblock custom_js %}
 </body>
 </html>

@@ -1,5 +1,6 @@
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import UserManager
+from django.core.validators import RegexValidator
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.db import models
@@ -7,6 +8,9 @@ from django.contrib.auth.models import AbstractUser
 from datetime import datetime,timedelta
 
 
+# Every course runs in both a Morning and a Day shift. A student belongs to one
+# shift; attendance is recorded per shift by the assigned teacher.
+SHIFT_CHOICES = (("morning", "Morning Shift"), ("day", "Day Shift"))
 
 
 class CustomUserManager(UserManager):
@@ -49,7 +53,13 @@ class CustomUser(AbstractUser):
     user_type = models.CharField(default=1, choices=USER_TYPE, max_length=1)
     gender = models.CharField(max_length=1, choices=GENDER)
     profile_pic = models.ImageField()
-    address = models.TextField()
+    address = models.TextField(blank=True, default="")
+    address_line1 = models.CharField(max_length=255, blank=True, default="")
+    address_line2 = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=100, blank=True, default="")
+    province = models.CharField(max_length=100, blank=True, default="")
+    phone_number = models.CharField(max_length=20, blank=True, default="")
+    date_of_birth = models.DateField(null=True, blank=True)
     fcm_token = models.TextField(default="")  # For firebase notifications
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -68,11 +78,25 @@ class Admin(models.Model):
 
 class Course(models.Model):
     name = models.CharField(max_length=120)
+    # Short form (e.g. "BE-IT") shown in tables/lists across the app; falls back
+    # to the full name when not set.
+    abbreviation = models.CharField(max_length=30, blank=True, default="")
+    semesters = models.PositiveSmallIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
+
+    @property
+    def short_name(self):
+        """Abbreviation if one is set, otherwise the full name."""
+        return self.abbreviation or self.name
+
+    @property
+    def name_with_abbr(self):
+        """Full name plus abbreviation in brackets, e.g. 'Bachelor ... (BE-IT)'."""
+        return "%s (%s)" % (self.name, self.abbreviation) if self.abbreviation else self.name
 
 class Book(models.Model):
     name = models.CharField(max_length=200)
@@ -86,8 +110,24 @@ class Book(models.Model):
 
 class Student(models.Model):
     admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    registration_number = models.CharField(
+        max_length=14, null=True, blank=True, unique=True,
+        validators=[RegexValidator(r'^\d{4}-\d{4}-\d{4}$', 'Registration number must be 12 digits (formatted as XXXX-XXXX-XXXX)')])
+    roll_number = models.CharField(
+        max_length=6, null=True, blank=True,
+        validators=[RegexValidator(r'^\d{6}$', 'Roll number must be exactly 6 digits')])
     course = models.ForeignKey(Course, on_delete=models.DO_NOTHING, null=True, blank=False)
     session = models.ForeignKey(Session, on_delete=models.DO_NOTHING, null=True)
+    shift = models.CharField(max_length=10, choices=SHIFT_CHOICES, default="morning")
+    # Which semester the student is currently enrolled in. New students start at
+    # semester 1; the "promote" actions bump this by one (an academic year is two
+    # semesters), capped at the course's total number of semesters.
+    current_semester = models.PositiveSmallIntegerField(default=1)
+    # Set when the student finishes the final semester. Passed-out students are
+    # excluded from the active student body (lists, attendance, promotion) and are
+    # kept on record per course + session under "Passed Out Students".
+    passed_out = models.BooleanField(default=False)
+    passed_out_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return self.admin.last_name + ", " + self.admin.first_name
@@ -109,17 +149,39 @@ class IssuedBook(models.Model):
 
 
 class Staff(models.Model):
-    course = models.ForeignKey(Course, on_delete=models.DO_NOTHING, null=True, blank=False)
+    staff_id = models.CharField(
+        max_length=6, null=True, blank=True, unique=True,
+        validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])
+    courses = models.ManyToManyField(Course, related_name='staff_members')
+    # A teacher can be assigned to the Morning shift, the Day shift, or both.
+    teaches_morning = models.BooleanField(default=True)
+    teaches_day = models.BooleanField(default=False)
     admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.admin.first_name + " " +  self.admin.last_name
 
+    @property
+    def shifts(self):
+        """List of shift values this staff teaches, e.g. ['morning', 'day']."""
+        result = []
+        if self.teaches_morning:
+            result.append('morning')
+        if self.teaches_day:
+            result.append('day')
+        return result
+
+    @property
+    def shifts_display(self):
+        labels = dict(SHIFT_CHOICES)
+        return ", ".join(labels[s] for s in self.shifts) or "—"
+
 
 class Subject(models.Model):
     name = models.CharField(max_length=120)
-    staff = models.ForeignKey(Staff,on_delete=models.CASCADE,)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    code = models.CharField(max_length=20, blank=True, default="")
+    credit_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    courses = models.ManyToManyField(Course, through='CourseSubject', related_name='subjects')
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -127,10 +189,45 @@ class Subject(models.Model):
         return self.name
 
 
+class CourseSubject(models.Model):
+    """Links a Subject to a Course at a specific semester.
+
+    A subject can belong to multiple courses, each at its own semester
+    (e.g. Sem 2 in one course, Sem 4 in another). Teaching staff are assigned
+    per course+subject, so different teachers can teach the same subject in
+    different courses (or several teachers can share one course+subject)."""
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    semester = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Teaching is per-shift: at most ONE teacher per (course, subject, shift).
+    # Using a single FK per shift structurally enforces that rule, while the
+    # same teacher can hold many slots across courses/subjects/shifts, and the
+    # morning vs day teacher of the same class can differ.
+    morning_staff = models.ForeignKey(
+        Staff, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='morning_assignments')
+    day_staff = models.ForeignKey(
+        Staff, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='day_assignments')
+
+    class Meta:
+        unique_together = ('course', 'subject')
+
+    def __str__(self):
+        return "%s - %s (Sem %s)" % (self.course, self.subject, self.semester)
+
+    def staff_for_shift(self, shift):
+        return self.morning_staff if shift == 'morning' else self.day_staff
+
+
 class Attendance(models.Model):
     session = models.ForeignKey(Session, on_delete=models.DO_NOTHING)
     subject = models.ForeignKey(Subject, on_delete=models.DO_NOTHING)
+    shift = models.CharField(max_length=10, choices=SHIFT_CHOICES, default="morning")
     date = models.DateField()
+    # Once confirmed via the Update Attendance screen the record is locked: it can
+    # no longer be edited, only viewed.
+    locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -139,6 +236,7 @@ class AttendanceReport(models.Model):
     student = models.ForeignKey(Student, on_delete=models.DO_NOTHING)
     attendance = models.ForeignKey(Attendance, on_delete=models.CASCADE)
     status = models.BooleanField(default=False)
+    late = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -203,21 +301,24 @@ class StudentResult(models.Model):
 @receiver(post_save, sender=CustomUser)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        if instance.user_type == 1:
+        # Coerce to str so it works whether user_type is passed as 1/2/3 (int) or '1'/'2'/'3'
+        user_type = str(instance.user_type)
+        if user_type == '1':
             Admin.objects.create(admin=instance)
-        if instance.user_type == 2:
+        if user_type == '2':
             Staff.objects.create(admin=instance)
-        if instance.user_type == 3:
+        if user_type == '3':
             Student.objects.create(admin=instance)
 
 
 @receiver(post_save, sender=CustomUser)
 def save_user_profile(sender, instance, **kwargs):
-    if instance.user_type == 1:
+    user_type = str(instance.user_type)
+    if user_type == '1':
         instance.admin.save()
-    if instance.user_type == 2:
+    if user_type == '2':
         instance.staff.save()
-    if instance.user_type == 3:
+    if user_type == '3':
         instance.student.save()
 
 # todos

@@ -1,0 +1,92 @@
+{% extends 'main_app/base.html' %}
+{% load static %}
+{% block page_title %}{{page_title}}{% endblock page_title %}
+
+{% block content %}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title">{{page_title}}</h3>
+                        <div class="text-nowrap">
+                            <a href="{% url 'manage_student_by_course_semester' course.id semester %}" class="btn btn-secondary btn-sm">&larr; Back to Shifts</a>
+                        </div>
+                    </div>
+                    <!-- /.card-header -->
+                    <div class="card-body" style="overflow-x: auto; overflow-y: auto; max-height: 600px;">
+                        <div class="form-group" style="max-width: 360px;">
+                            <input type="text" id="student_search" class="form-control"
+                                   placeholder="Search by name, registration or roll number...">
+                        </div>
+                        <table id="example2" class="table table-bordered table-hover" style="min-width: 900px;">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Registration No.</th>
+                                    <th>Roll No.</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Course</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in students %}
+                                <tr class="clickable-row" data-href="{% url 'student_details' student.student.id %}" style="cursor: pointer;">
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ student.student.registration_number|default:"—" }}</td>
+                                    <td>{{ student.student.roll_number|default:"—" }}</td>
+                                    <td>{{student.first_name}} {{student.last_name}}</td>
+                                    <td>{{student.email}}</td>
+                                    <td title="{{student.student.course.name}}">{{student.student.course.short_name}}</td>
+
+                                    <td class="text-nowrap" onclick="event.stopPropagation()">
+                                        <a href="{% url 'edit_student' student.student.id %}" class="btn btn-sm btn-info" title="Edit"><i class="fas fa-edit"></i></a>
+                                        <a href="{% url 'delete_student' student.student.id %}" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Are you sure about this ?')"><i class="fas fa-trash"></i></a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center">No students enrolled in this course.</td>
+                                </tr>
+                                {% endfor %}
+                                <tr id="no_match_row" style="display: none;">
+                                    <td colspan="7" class="text-center">No students match your search.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}
+
+{% block custom_js %}
+<script>
+    $(document).ready(function () {
+        $("#example2").on("click", ".clickable-row", function () {
+            window.location = $(this).data("href");
+        });
+        $("#student_search").on("keyup", function () {
+            var query = $(this).val().toLowerCase().trim();
+            var visible = 0;
+            $("#example2 tbody tr").not("#no_match_row").each(function () {
+                var cells = $(this).find("td");
+                if (cells.length < 4) { return; }
+                var reg = cells.eq(1).text().toLowerCase();
+                var roll = cells.eq(2).text().toLowerCase();
+                var name = cells.eq(3).text().toLowerCase();
+                var match = name.indexOf(query) > -1 || reg.indexOf(query) > -1 || roll.indexOf(query) > -1;
+                $(this).toggle(match);
+                if (match) { visible++; }
+            });
+            $("#no_match_row").toggle(visible === 0);
+        });
+    });
+</script>
+{% endblock custom_js %}

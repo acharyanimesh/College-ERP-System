@@ -108,7 +108,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            {% url 'manage_subject' as manage_subject %}
+                            {% url 'manage_course' as manage_subject %}
                             {% url 'edit_subject' subject_id as edit_subject %}
                             <a href="{{manage_subject}}"
                                 class="nav-link  {% if edit_subject == request.path or manage_subject == request.path %} active {% endif %}">

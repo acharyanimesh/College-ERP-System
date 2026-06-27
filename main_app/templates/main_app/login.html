@@ -65,7 +65,8 @@
 
                 <!-- reCAPTCHA  "6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF" "6LfHPwojAAAAAAmIefBYBh_y9qTAmKrzIXWF_6FZ"- local-->
                 <div class="form-group text-center">
-                    <div class="g-recaptcha" data-sitekey="6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF"></div>
+                    <div class="g-recaptcha" data-sitekey="6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF" data-theme="dark">
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -93,7 +94,7 @@
             <!-- Footer -->
             <div class="login-footer text-center mt-4">
                 <small class="text-muted">
-                    © 2024 College ERP System. All rights reserved.
+                    © 2026 College ERP System. All rights reserved.
                 </small>
             </div>
         </div>
@@ -101,6 +102,33 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'plugins/jquery/jquery.min.js' %}"></script>
+
+    <!-- Vanta.js DOTS animated background (three.js required) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.dots.min.js"></script>
+    <script>
+        // Animated dots background on the login screen
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.VANTA) {
+                window.VANTA.DOTS({
+                    el: '.login-container',
+                    mouseControls: true,
+                    touchControls: true,
+                    gyroControls: false,
+                    minHeight: 200.00,
+                    minWidth: 200.00,
+                    scale: 1.00,
+                    scaleMobile: 1.00,
+                    color: 0xff8820,
+                    color2: 0xff8820,
+                    backgroundColor: 0x202428,
+                    size: 3.00,
+                    spacing: 35.00,
+                    showLines: true
+                });
+            }
+        });
+    </script>
 
     <script>
         // Add some interactive effects
@@ -122,7 +150,7 @@
             const loginBtn = document.querySelector('.btn-primary');
             loginBtn.addEventListener('mouseenter', function () {
                 this.style.transform = 'translateY(-2px)';
-                this.style.boxShadow = '0 4px 12px rgba(94, 100, 255, 0.4)';
+                this.style.boxShadow = '0 4px 12px rgba(255, 136, 32, 0.45)';
             });
 
             loginBtn.addEventListener('mouseleave', function () {

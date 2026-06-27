@@ -71,6 +71,41 @@
             </div>
         </div>
     </div>
+
+    <!-- My Subjects -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="erpnext-card">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="fas fa-book me-2"></i>My Subjects</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Subject</th>
+                                <th>Teacher</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cs in course_subjects %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ cs.subject.name }}</td>
+                                <td>{% if cs.shift_teacher %}{{ cs.shift_teacher.admin.first_name }} {{ cs.shift_teacher.admin.last_name }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">No subjects available for your course yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock content %}
 

@@ -3,6 +3,56 @@
 {% block page_title %}{{page_title}}{% endblock page_title %}
 {% block content %}
 
+<style>
+    /* Compact, easy-to-use date picker */
+    .attendance-date-input {
+        max-width: 200px;
+        font-size: 0.95rem;
+        height: auto;
+        padding: 0.4rem 0.6rem;
+    }
+    .attendance-date-input::-webkit-calendar-picker-indicator {
+        transform: scale(1.25);
+        cursor: pointer;
+        margin-left: 0.35rem;
+        filter: invert(0.85);
+    }
+    /* Student attendance list — glassy look matching the rest of the page */
+    .student-attendance-list .list-group-item {
+        padding: 0.85rem 1rem;
+        background: var(--glass-bg, rgba(7, 27, 43, 0.66));
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border, rgba(130, 200, 230, 0.16));
+        color: var(--glass-text, #e8f1f7);
+    }
+    .student-attendance-list .student-name {
+        font-weight: 600;
+        font-size: 1.05rem;
+        color: var(--glass-text, #e8f1f7);
+    }
+    .student-attendance-list .attendance-status .status-btn {
+        min-width: 90px;
+    }
+    /* Subject picker — clean pill buttons instead of a dropdown */
+    .subject-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .subject-picker .subject-btn {
+        font-weight: 500;
+        border-radius: 6px;
+        padding: 0.45rem 1rem;
+    }
+    .subject-picker .subject-btn.active {
+        background: var(--primary-color, #5e64ff);
+        border-color: var(--primary-color, #5e64ff);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(94, 100, 255, 0.35);
+    }
+</style>
+
 <section class="content">
     <div class="container-fluid">
         <div class="row">
@@ -20,24 +70,52 @@
 
 
                         <div class="form-group">
+                            <label>Shift</label>
+                            <select name="shift" id='shift' class="form-control">
+                                {% for value, label in shifts %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
                             <label>Subject</label>
-                            <select name="subject" class="form-control" id='subject'>
+                            <div class="subject-picker" id="subject_picker">
+                                {% for subject in subjects %}
+                                <button type="button" class="btn btn-outline-primary subject-btn"
+                                        data-id="{{ subject.id }}"
+                                        data-morning="{{ subject.morning|yesno:'1,0' }}"
+                                        data-day="{{ subject.day|yesno:'1,0' }}"
+                                        data-assignments='{{ subject.assignments_json }}'>{{ subject.name }}</button>
+                                {% empty %}
+                                <span class="text-muted">You are not assigned to any subjects.</span>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" id="subject" value="">
+                            <small class="text-muted">Click a subject you teach. Only those valid for the selected shift are shown.</small>
+                        </div>
+
+
+                        <div class="form-group">
+                            <label>Course</label>
+                            <select name="course" class="form-control" id='course'>
                                 <option value="">----</option>
-                                {% for subject in subjects  %}
-                                <option value="{{subject.id}}">{{subject.name}}</option>
+                                {% for course in courses  %}
+                                <option value="{{course.id}}">{{course.short_name}}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
 
                         <div class="form-group">
-                            <label>Session Year</label>
-                            <select name="session" id='session' class="form-control">
+                            <label>Semester</label>
+                            <select name="semester" id='semester' class="form-control">
                                 <option value="">----</option>
-                                {% for session in sessions  %}
-                                <option value="{{session.id}}">{{session}} </option>
+                                {% for sem in semesters %}
+                                <option value="{{ sem }}">Semester {{ sem }}</option>
                                 {% endfor %}
                             </select>
+                            <small class="text-muted">Only semesters you teach are listed; it is set automatically when you pick a subject.</small>
                         </div>
                         {% comment %}
 
@@ -70,34 +148,101 @@
 <script>
     $(document).ready(function () {
 
-       
+        // Show only the subject buttons this teacher takes in the selected shift.
+        function filterSubjectsByShift() {
+            var shift = $("#shift").val();
+            $(".subject-btn").each(function () {
+                var ok = ($(this).data(shift) == 1);
+                $(this).toggle(ok);
+                // Clear a now-invalid selection.
+                if (!ok && $(this).hasClass('active')) {
+                    $(this).removeClass('active');
+                    $("#subject").val("");
+                }
+            });
+        }
+        $("#shift").on('change', function () {
+            filterSubjectsByShift();
+            autoSetSemester();
+        });
+        filterSubjectsByShift();
+
+        // Select a subject by clicking its button.
+        $(document).on('click', '.subject-btn', function () {
+            $(".subject-btn").removeClass('active');
+            $(this).addClass('active');
+            $("#subject").val($(this).data('id'));
+            autoSetSemester();
+        });
+
+        // A subject is taught at one semester per course+shift. Pick it automatically
+        // as soon as it is unambiguous: from the subject + shift alone, narrowing by
+        // course only if one is selected (and several courses would otherwise differ).
+        function autoSetSemester() {
+            var $sel = $(".subject-btn.active");
+            if (!$sel.length) { return; }
+            var assignments = $sel.data('assignments') || [];
+            var course = $("#course").val();
+            var shift = $("#shift").val();
+            var sems = [];
+            for (var i = 0; i < assignments.length; i++) {
+                var a = assignments[i];
+                if (a.shifts.indexOf(shift) === -1) { continue; }
+                if (course && String(a.course) !== String(course)) { continue; }
+                if (a.semester != null && sems.indexOf(a.semester) === -1) { sems.push(a.semester); }
+            }
+            if (sems.length === 1) { $("#semester").val(String(sems[0])); }
+        }
+        $("#course").on('change', autoSetSemester);
+
+        // Toggle the selected attendance status for a student.
+        $(document).on('click', '.status-btn', function () {
+            $(this).closest('.attendance-status').find('.status-btn').removeClass('active');
+            $(this).addClass('active');
+        });
+
         $("#fetch_student").click(function () {
             var subject = $("#subject").val()
-            var session = $("#session").val()
+            var semester = $("#semester").val()
+            var course = $("#course").val()
+            var shift = $("#shift").val()
             $("#student_data").html(null)
-if (subject.length  == 0 || session.length == 0){
-    alert("Please select session and subject");
+if (subject.length  == 0 || semester.length == 0 || course.length == 0 || shift.length == 0){
+    alert("Please select subject, course, semester and shift");
     return false;
 }
             $.ajax({
                 url: "{% url 'get_students' %}",
                 type: 'POST',
                 data: {
-                    subject: subject,
-                    session: session
+                    semester: semester,
+                    course: course,
+                    shift: shift
                 }
             }).done(function (response) {
                 var json_data = JSON.parse(response)
                 if (json_data.length < 1) {
                     alert("No data to display")
                 } else {
-                    var div_data = "<hr/><div class='form-group'></div><div class='form-group'> <label>Attendance Date</label><input type='date' class='form-control' name='attendance_date' id='attendance_date' ><div class='row'>"
-
+                    var today = new Date();
+                    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                    var div_data = "<hr/><div class='form-group'><label>Attendance Date</label>"
+                        + "<input type='date' class='form-control attendance-date-input' id='attendance_date' value='" + todayStr + "'>"
+                        + "<small class='text-muted'>Select the date you are taking attendance for.</small></div>"
+                    div_data += "<div class='list-group student-attendance-list'>"
                     for (key in json_data) {
-                        div_data += "<div class='col-lg-3'><div class='form-check custom-control custom-checkbox'><input type='checkbox' class='custom-control-input' checked='checked' name='student_data[]' value=" + json_data[key]['id'] + " id='checkbox" + json_data[key]['id'] + "' /> <label for='checkbox" + json_data[key]['id'] + "' class='custom-control-label'>" + json_data[key]['name'] + "</label></div> </div>"
+                        var sid = json_data[key]['id'];
+                        var roll = json_data[key]['roll_number'] ? " <small class='text-muted'>(Roll: " + json_data[key]['roll_number'] + ")</small>" : "";
+                        div_data += "<div class='list-group-item d-flex justify-content-between align-items-center flex-wrap'>"
+                            + "<span class='student-name'>" + json_data[key]['name'] + roll + "</span>"
+                            + "<div class='btn-group attendance-status' role='group' data-sid='" + sid + "'>"
+                            + "<button type='button' class='btn btn-outline-success status-btn' data-value='present'>Present</button>"
+                            + "<button type='button' class='btn btn-outline-danger status-btn' data-value='absent'>Absent</button>"
+                            + "<button type='button' class='btn btn-outline-warning status-btn' data-value='late'>Late</button>"
+                            + "</div></div>"
                     }
-                    div_data += "</div></div>"
-                    div_data += "<div class='form-group'><button id='save_attendance' class='btn btn-success' type='button'>Save Attendance</button></div>"
+                    div_data += "</div>"
+                    div_data += "<div class='form-group mt-3'><button id='save_attendance' class='btn btn-success' type='button'>Save Attendance</button></div>"
                     $("#student_data").html(div_data)
                 }
             }).fail(function (response) {
@@ -106,21 +251,25 @@ if (subject.length  == 0 || session.length == 0){
 
 
             $(document).on('click', '#save_attendance', function () {
-                $(this).attr("disabled","disabled")
-                $(this).text("Saving Attendance Data...")
-                var student_data = $("input[name='student_data[]']").map(function () {
-                    if ($(this).is(":checked")){
-                    return {'id':$(this).val(), 'status': 1};
-    
-                    }
-                    return {'id':$(this).val(), 'status': 0};
-    
-                }).get()
-                var attendance_date = $('#attendance_date').val()
-                if (attendance_date.length < 10){
-                    alert("Select date")
+                // Nothing is preselected, so make sure every student has been marked.
+                var unmarked = $(".attendance-status").filter(function () {
+                    return $(this).find('.status-btn.active').length === 0;
+                }).length;
+                if (unmarked > 0) {
+                    alert("Please mark Present, Absent or Late for all " + unmarked + " remaining student(s) before saving.");
                     return false;
                 }
+                $(this).attr("disabled","disabled")
+                $(this).text("Saving Attendance Data...")
+                var student_data = [];
+                $(".attendance-status").each(function () {
+                    var sid = $(this).data('sid');
+                    var val = $(this).find('.status-btn.active').data('value');
+                    var status = (val === 'absent') ? 0 : 1;
+                    var late = (val === 'late') ? 1 : 0;
+                    student_data.push({ 'id': sid, 'status': status, 'late': late });
+                });
+                var attendance_date = $('#attendance_date').val()
                 student_data = JSON.stringify(student_data)
                 $.ajax({
                     url: "{% url 'save_attendance' %}",
@@ -129,17 +278,26 @@ if (subject.length  == 0 || session.length == 0){
                         date: attendance_date,
                         student_ids: student_data,
                         subject: subject,
-                        session: session
-            
+                        course: course,
+                        semester: semester,
+                        shift: shift
+
                     }
                 }).done(function (response) {
                     if (response == 'OK'){
                         alert("Saved")
+                        location.reload()
+                    }else if (response == 'NOT_ASSIGNED'){
+                        alert("You are not assigned to this subject at the selected course/semester/shift, so you cannot take its attendance.")
+                        $("#save_attendance").removeAttr("disabled").text("Save Attendance")
+                    }else if (response == 'NO_SESSION'){
+                        alert("These students have no session/intake set, so attendance cannot be recorded. Please set their session first.")
+                        $("#save_attendance").removeAttr("disabled").text("Save Attendance")
                     }else{
                         alert("Error. Please try again")
+                        location.reload()
                     }
-                    location.reload()
-                    
+
                 }).fail(function (response) {
                     alert("Error in saving attendance")
                 })

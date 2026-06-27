@@ -1,0 +1,110 @@
+{% extends 'main_app/base.html' %}
+{% load static %}
+{% block page_title %}{{page_title}}{% endblock page_title %}
+
+{% block custom_css %}
+<style>
+    .assign-table td, .assign-table th { vertical-align: middle; }
+    .assign-table .shift-cell { text-align: center; white-space: nowrap; }
+    .assign-table .taken { font-size: 0.82rem; }
+    .assign-shift-check { transform: scale(1.25); cursor: pointer; }
+</style>
+{% endblock custom_css %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card card-dark">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title">{{page_title}}</h3>
+                        <a href="{% url 'manage_staff' %}" class="btn btn-secondary btn-sm">&larr; Back to Manage Staff</a>
+                    </div>
+
+                    <form role="form" method="POST">
+                        {% csrf_token %}
+                        <div class="card-body">
+                            <p class="text-muted">
+                                Tick the shift(s) this teacher takes for each subject. Only <strong>one teacher per
+                                subject per shift</strong> is allowed — a slot already held by another teacher is locked
+                                and shows their name. The same teacher may teach across multiple courses, subjects and shifts.
+                            </p>
+                            <div class="form-group" style="max-width: 360px;">
+                                <input type="text" id="assign_search" class="form-control"
+                                       placeholder="Search by subject or course...">
+                            </div>
+                            <div style="overflow-x:auto; max-height: 600px;">
+                            <table class="table table-bordered table-hover assign-table" style="min-width: 760px;">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Subject</th>
+                                        <th>Course</th>
+                                        <th>Sem</th>
+                                        <th class="shift-cell">Morning</th>
+                                        <th class="shift-cell">Day</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in rows %}
+                                    <tr class="assign-row">
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{% if row.cs.subject.code %}<strong>{{ row.cs.subject.code }}</strong> — {% endif %}{{ row.cs.subject.name }}</td>
+                                        <td title="{{ row.cs.course.name }}">{{ row.cs.course.short_name }}</td>
+                                        <td>{{ row.cs.semester|default:"?" }}</td>
+                                        <td class="shift-cell">
+                                            {% if row.morning_other %}
+                                                <span class="badge badge-warning taken" title="Taken">{{ row.morning_other.admin.first_name }} {{ row.morning_other.admin.last_name }}</span>
+                                            {% else %}
+                                                <input type="checkbox" class="assign-shift-check" name="morning" value="{{ row.cs.id }}" {% if row.morning_mine %}checked{% endif %}>
+                                            {% endif %}
+                                        </td>
+                                        <td class="shift-cell">
+                                            {% if row.day_other %}
+                                                <span class="badge badge-warning taken" title="Taken">{{ row.day_other.admin.first_name }} {{ row.day_other.admin.last_name }}</span>
+                                            {% else %}
+                                                <input type="checkbox" class="assign-shift-check" name="day" value="{{ row.cs.id }}" {% if row.day_mine %}checked{% endif %}>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="6" class="text-center">No course subjects available. Add subjects to courses first.</td></tr>
+                                    {% endfor %}
+                                    <tr id="assign_no_match" style="display:none;"><td colspan="6" class="text-center">No rows match your search.</td></tr>
+                                </tbody>
+                            </table>
+                            </div>
+                        </div>
+                        <!-- /.card-body -->
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-success btn-block">Save Assignments</button>
+                        </div>
+                    </form>
+                </div>
+                <!-- /.card -->
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}
+
+{% block custom_js %}
+<script>
+    $(document).ready(function () {
+        $("#assign_search").on("keyup", function () {
+            var query = $(this).val().toLowerCase().trim();
+            var visible = 0;
+            $(".assign-row").each(function () {
+                var cells = $(this).find("td");
+                var subject = cells.eq(1).text().toLowerCase();
+                var course = cells.eq(2).text().toLowerCase();
+                var match = subject.indexOf(query) > -1 || course.indexOf(query) > -1;
+                $(this).toggle(match);
+                if (match) { visible++; }
+            });
+            $("#assign_no_match").toggle(visible === 0);
+        });
+    });
+</script>
+{% endblock custom_js %}

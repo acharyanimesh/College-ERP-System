@@ -29,7 +29,7 @@
                               <tr>
                                   <td>{{forloop.counter}}</td>
                                   <td>{{feedback.staff}}</td>
-                                  <td>{{feedback.staff.course}}</td>
+                                  <td>{% for c in feedback.staff.courses.all %}{{c.name}}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">—</span>{% endfor %}</td>
                                   <td>{{feedback.feedback}}</td>
                                       
                                             

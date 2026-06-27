@@ -5,9 +5,10 @@ from django.contrib.auth import authenticate, login, logout
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 
 from .EmailBackend import EmailBackend
-from .models import Attendance, Session, Subject 
+from .models import Attendance, Session, Student, Subject
 
 # Create your views here.
 
@@ -27,26 +28,27 @@ def doLogin(request, **kwargs):
     if request.method != 'POST':
         return HttpResponse("<h4>Denied</h4>")
     else:
-        #Google recaptcha
-        captcha_token = request.POST.get('g-recaptcha-response')
-        captcha_url = "https://www.google.com/recaptcha/api/siteverify"
-        captcha_key = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
-        # captcha_key = "6LfHPwojAAAAAAtIjbi-7_N4fNf7Wp0LUiYlCDw_"  #server
-        data = {
-            'secret': captcha_key,
-            'response': captcha_token
-        }
-        # Make request
-        try:
-            captcha_server = requests.post(url=captcha_url, data=data)
-            response = json.loads(captcha_server.text)
-            if response['success'] == False:
-                messages.error(request, 'Invalid Captcha. Try Again')
+        #Google recaptcha (skipped in local DEBUG mode where the domain-bound key can't verify)
+        if not settings.DEBUG:
+            captcha_token = request.POST.get('g-recaptcha-response')
+            captcha_url = "https://www.google.com/recaptcha/api/siteverify"
+            captcha_key = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
+            # captcha_key = "6LfHPwojAAAAAAtIjbi-7_N4fNf7Wp0LUiYlCDw_"  #server
+            data = {
+                'secret': captcha_key,
+                'response': captcha_token
+            }
+            # Make request
+            try:
+                captcha_server = requests.post(url=captcha_url, data=data)
+                response = json.loads(captcha_server.text)
+                if response['success'] == False:
+                    messages.error(request, 'Invalid Captcha. Try Again')
+                    return redirect('/')
+            except:
+                messages.error(request, 'Captcha could not be verified. Try Again')
                 return redirect('/')
-        except:
-            messages.error(request, 'Captcha could not be verified. Try Again')
-            return redirect('/')
-        
+
         #Authenticate
         user = EmailBackend.authenticate(request, username=request.POST.get('email'), password=request.POST.get('password'))
         if user != None:
@@ -83,16 +85,32 @@ def logout_user(request):
 @csrf_exempt
 def get_attendance(request):
     subject_id = request.POST.get('subject')
-    session_id = request.POST.get('session')
+    course_id = request.POST.get('course')
+    semester = request.POST.get('semester')
+    shift = request.POST.get('shift')
     try:
         subject = get_object_or_404(Subject, id=subject_id)
-        session = get_object_or_404(Session, id=session_id)
-        attendance = Attendance.objects.filter(subject=subject, session=session)
+        attendance = Attendance.objects.filter(subject=subject, shift=shift)
+        # The Update screen only edits unlocked records; the View screen
+        # (include_locked=1) shows every confirmed/saved record.
+        if request.POST.get('include_locked') != '1':
+            attendance = attendance.filter(locked=False)
+        # Scope to the current cohort's intake when we can identify it, so the
+        # date list matches the class being updated (mirrors take-attendance).
+        cohort = Student.objects.filter(
+            course_id=course_id, current_semester=semester, shift=shift, passed_out=False)
+        first_student = cohort.first()
+        if first_student and first_student.session_id:
+            attendance = attendance.filter(session=first_student.session)
         attendance_list = []
-        for attd in attendance:
+        for attd in attendance.order_by('-date'):
+            label = "%s (%s)" % (attd.date, attd.get_shift_display())
+            if attd.locked:
+                label += " — confirmed"
             data = {
                     "id": attd.id,
-                    "attendance_date": str(attd.date),
+                    "attendance_date": label,
+                    "locked": attd.locked,
                     "session": attd.session.id
                     }
             attendance_list.append(data)

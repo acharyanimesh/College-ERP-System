@@ -1,8 +1,25 @@
 from django import forms
 from django.forms.widgets import DateInput, TextInput
+from django.core.validators import RegexValidator
 
 from .models import *
 from . import models
+
+
+def format_subject_code(value):
+    """Normalize a subject code to UPPERCASE with a single space after the
+    first 3 characters, e.g. 'abc123' -> 'ABC 123'."""
+    code = (value or '').strip().upper().replace(' ', '')
+    if len(code) > 3:
+        code = code[:3] + ' ' + code[3:]
+    return code
+
+
+# Live (client-side) version of the same formatting, applied as the user types.
+SUBJECT_CODE_ONINPUT = (
+    "this.value = this.value.toUpperCase().replace(/\\s+/g, '')"
+    ".replace(/^(.{3})(.+)$/, '$1 $2')"
+)
 
 
 class FormSettings(forms.ModelForm):
@@ -23,7 +40,7 @@ class CustomUserForm(FormSettings):
     widget = {
         'password': forms.PasswordInput(),
     }
-    profile_pic = forms.ImageField()
+    profile_pic = forms.ImageField(required=False)
 
     def __init__(self, *args, **kwargs):
         super(CustomUserForm, self).__init__(*args, **kwargs)
@@ -57,13 +74,41 @@ class CustomUserForm(FormSettings):
 
 
 class StudentForm(CustomUserForm):
+    registration_number = forms.CharField(
+        required=True, max_length=14, label='Registration Number',
+        validators=[RegexValidator(r'^\d{4}-\d{4}-\d{4}$', 'Registration number must be 12 digits (formatted as XXXX-XXXX-XXXX)')])
+    roll_number = forms.CharField(
+        required=True, max_length=6, label='Roll Number',
+        validators=[RegexValidator(r'^\d{6}$', 'Roll number must be exactly 6 digits')])
+    address_line1 = forms.CharField(required=True, label='Address Line 1')
+    address_line2 = forms.CharField(required=False, label='Address Line 2')
+    city = forms.CharField(required=False, label='City')
+    province = forms.CharField(required=False, label='Province')
+    phone_number = forms.CharField(required=False)
+    date_of_birth = forms.DateField(
+        required=False, widget=DateInput(attrs={'type': 'date'}))
+    shift = forms.ChoiceField(choices=Student._meta.get_field('shift').choices, label='Shift')
+    current_semester = forms.IntegerField(
+        min_value=1, initial=1, label='Current Semester',
+        widget=forms.NumberInput(attrs={'min': 1, 'step': 1}),
+        help_text="The semester this student is currently in (new students start at 1).")
+
     def __init__(self, *args, **kwargs):
         super(StudentForm, self).__init__(*args, **kwargs)
+        self.fields.pop('address', None)
+        if kwargs.get('instance'):
+            admin = kwargs.get('instance').admin
+            self.fields['phone_number'].initial = admin.phone_number
+            self.fields['date_of_birth'].initial = admin.date_of_birth
+            self.fields['address_line1'].initial = admin.address_line1
+            self.fields['address_line2'].initial = admin.address_line2
+            self.fields['city'].initial = admin.city
+            self.fields['province'].initial = admin.province
 
     class Meta(CustomUserForm.Meta):
         model = Student
         fields = CustomUserForm.Meta.fields + \
-            ['course', 'session']
+            ['registration_number', 'roll_number', 'course', 'session', 'shift', 'current_semester']
 
 
 class AdminForm(CustomUserForm):
@@ -76,13 +121,46 @@ class AdminForm(CustomUserForm):
 
 
 class StaffForm(CustomUserForm):
+    staff_id = forms.CharField(
+        required=True, max_length=6,
+        validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])
+    address_line1 = forms.CharField(required=True, label='Address Line 1')
+    address_line2 = forms.CharField(required=False, label='Address Line 2')
+    city = forms.CharField(required=False, label='City')
+    province = forms.CharField(required=False, label='Province')
+    phone_number = forms.CharField(required=False)
+    date_of_birth = forms.DateField(
+        required=False, widget=DateInput(attrs={'type': 'date'}))
+    teaches_morning = forms.BooleanField(required=False, label='Morning Shift')
+    teaches_day = forms.BooleanField(required=False, label='Day Shift')
+
     def __init__(self, *args, **kwargs):
         super(StaffForm, self).__init__(*args, **kwargs)
+        self.fields.pop('address', None)
+        # Checkboxes shouldn't carry the .form-control class added by FormSettings.
+        for f in ('teaches_morning', 'teaches_day'):
+            self.fields[f].widget.attrs['class'] = 'form-check-input'
+        if kwargs.get('instance'):
+            admin = kwargs.get('instance').admin
+            self.fields['phone_number'].initial = admin.phone_number
+            self.fields['date_of_birth'].initial = admin.date_of_birth
+            self.fields['address_line1'].initial = admin.address_line1
+            self.fields['address_line2'].initial = admin.address_line2
+            self.fields['city'].initial = admin.city
+            self.fields['province'].initial = admin.province
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('teaches_morning') and not cleaned.get('teaches_day'):
+            raise forms.ValidationError(
+                "Please assign the staff to at least one shift (Morning or Day).")
+        return cleaned
 
     class Meta(CustomUserForm.Meta):
         model = Staff
         fields = CustomUserForm.Meta.fields + \
-            ['course' ]
+            ['staff_id', 'phone_number', 'date_of_birth', 'courses',
+             'teaches_morning', 'teaches_day']
 
 
 class CourseForm(FormSettings):
@@ -90,18 +168,51 @@ class CourseForm(FormSettings):
         super(CourseForm, self).__init__(*args, **kwargs)
 
     class Meta:
-        fields = ['name']
+        fields = ['name', 'abbreviation', 'semesters']
         model = Course
 
 
 class SubjectForm(FormSettings):
+    # Course assignment + per-course semester are handled manually in the
+    # view/template (see edit_subject), not as ModelForm fields.
 
     def __init__(self, *args, **kwargs):
         super(SubjectForm, self).__init__(*args, **kwargs)
+        # Subject codes are uppercase with a space after the first 3 chars
+        # (e.g. 'ABC 123') — format live as the user types.
+        self.fields['code'].widget.attrs.update({
+            'class': 'form-control text-uppercase',
+            'oninput': SUBJECT_CODE_ONINPUT,
+        })
+
+    def clean_code(self):
+        return format_subject_code(self.cleaned_data.get('code'))
 
     class Meta:
         model = Subject
-        fields = ['name', 'staff', 'course']
+        fields = ['name', 'code', 'credit_hours']
+        labels = {'code': 'Subject Code'}
+
+
+class AddSubjectForm(FormSettings):
+    # Courses + per-course semesters are handled manually in add_subject.
+
+    def __init__(self, *args, **kwargs):
+        super(AddSubjectForm, self).__init__(*args, **kwargs)
+        # Subject codes are uppercase with a space after the first 3 chars
+        # (e.g. 'ABC 123') — format live as the user types.
+        self.fields['code'].widget.attrs.update({
+            'class': 'form-control text-uppercase',
+            'oninput': SUBJECT_CODE_ONINPUT,
+        })
+
+    def clean_code(self):
+        return format_subject_code(self.cleaned_data.get('code'))
+
+    class Meta:
+        model = Subject
+        fields = ['name', 'code', 'credit_hours']
+        labels = {'code': 'Subject Code'}
 
 
 class SessionForm(FormSettings):

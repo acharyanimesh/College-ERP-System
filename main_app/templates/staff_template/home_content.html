@@ -118,6 +118,11 @@
 {% block custom_js %}
   <script>
       $(document).ready(function(){
+        // Light, clearly-visible chart colors on the dark glass background
+        var glassTheme = document.body.classList.contains('glass-theme');
+        var chartTextColor = glassTheme ? '#e8f1f7' : '#262626';
+        var chartGridColor = glassTheme ? 'rgba(255, 255, 255, 0.12)' : '#f1f3f4';
+
         var donutData        = {
             labels: ['Attendance', 'Leave'],
             datasets: [
@@ -132,6 +137,14 @@
         var pieOptions     = {
           maintainAspectRatio : false,
           responsive : true,
+          plugins : {
+            legend : {
+              labels : {
+                color : chartTextColor,
+                font : { size: 14, weight: '600' }
+              }
+            }
+          }
         }
         //Create pie or douhnut chart
         // You can switch between pie and douhnut using the method below.
@@ -170,13 +183,26 @@
     var stackedBarChartOptions = {
       responsive              : true,
       maintainAspectRatio     : false,
+      plugins: {
+        legend: {
+          labels: {
+            color: chartTextColor,
+            font: { size: 14, weight: '600' }
+          }
+        }
+      },
       scales: {
-        xAxes: [{
+        x: {
           stacked: true,
-        }],
-        yAxes: [{
-          stacked: true
-        }]
+          ticks: { color: chartTextColor, font: { weight: '600' } },
+          grid: { color: chartGridColor }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: chartTextColor, font: { weight: '600' } },
+          grid: { color: chartGridColor }
+        }
       }
     }
     

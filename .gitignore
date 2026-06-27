@@ -10,7 +10,10 @@ __pycache__/
 # Django stuff:
 *.log
 local_settings.py
-db.sqlite3
+# db.sqlite3 is intentionally committed so the data + admin login sync across devices.
+# Backup snapshots are NOT committed:
+db.sqlite3.bak*
+*.bak
 
 # Environments
 .vscode

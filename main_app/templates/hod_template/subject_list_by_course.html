@@ -1,0 +1,107 @@
+{% extends 'main_app/base.html' %}
+{% load static %}
+{% block page_title %}{{page_title}}{% endblock page_title %}
+
+{% block content %}
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title">{{page_title}}</h3>
+                        <a href="{% url 'manage_subject_by_course' course.id %}" class="btn btn-secondary btn-sm">&larr; Back to Semesters</a>
+                    </div>
+                    <!-- /.card-header -->
+                    <div class="card-body" style="overflow-x: auto;">
+                        <form method="POST" action="{% url 'manage_subject_by_semester' course.id semester %}" class="mb-4">
+                            {% csrf_token %}
+                            <label class="font-weight-bold d-block mb-3">Add Subject to <span title="{{ course.name }}">{{ course.short_name }}</span> - Semester {{ semester }}</label>
+                            <div class="row">
+                                <div class="form-group col-md-8 col-lg-6 mb-3">
+                                    <label class="mb-1">Subject Name</label>
+                                    <input type="text" name="name" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="form-group col-md-4 col-lg-3 mb-3">
+                                    <label class="mb-1">Code</label>
+                                    <input type="text" name="code" class="form-control text-uppercase"
+                                           oninput="this.value = this.value.toUpperCase().replace(/\s+/g, '').replace(/^(.{3})(.+)$/, '$1 $2')">
+                                </div>
+                                <div class="form-group col-md-4 col-lg-3 mb-3">
+                                    <label class="mb-1">Credit Hours</label>
+                                    <input type="number" name="credit_hours" class="form-control" min="0">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success"><i class="fas fa-plus"></i> Add Subject</button>
+                        </form>
+                        <hr/>
+                        <div class="form-group" style="max-width: 360px;">
+                            <input type="text" id="subject_search" class="form-control"
+                                   placeholder="Search by code or subject name...">
+                        </div>
+                        <table id="example2" class="table table-bordered table-hover">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Code</th>
+                                    <th>Subject</th>
+                                    <th>Credit Hours</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subject in subjects %}
+                                <tr class="clickable-row" data-href="{% url 'subject_details' subject.id %}" style="cursor: pointer;">
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ subject.code|default:"—" }}</td>
+                                    <td>{{subject.name}}</td>
+                                    <td>{{ subject.credit_hours|default:"—" }}</td>
+                                    <td class="text-nowrap" onclick="event.stopPropagation()">
+                                        <a href="{% url 'edit_subject' subject.id %}?next={{ request.path|urlencode }}" class="btn btn-sm btn-info" title="Edit"><i class="fas fa-edit"></i></a>
+                                        <a href="{% url 'delete_subject' subject.id %}" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Are you sure you want to delete this ?')"><i class="fas fa-trash"></i></a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No subjects in this course.</td>
+                                </tr>
+                                {% endfor %}
+                                <tr id="no_match_row" style="display: none;">
+                                    <td colspan="5" class="text-center">No subjects match your search.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}
+
+{% block custom_js %}
+<script>
+    $(document).ready(function () {
+        $("#example2").on("click", ".clickable-row", function () {
+            window.location = $(this).data("href");
+        });
+        $("#subject_search").on("keyup", function () {
+            var query = $(this).val().toLowerCase().trim();
+            var visible = 0;
+            $("#example2 tbody tr").not("#no_match_row").each(function () {
+                var cells = $(this).find("td");
+                if (cells.length < 3) { return; }
+                var code = cells.eq(1).text().toLowerCase();
+                var name = cells.eq(2).text().toLowerCase();
+                var match = name.indexOf(query) > -1 || code.indexOf(query) > -1;
+                $(this).toggle(match);
+                if (match) { visible++; }
+            });
+            $("#no_match_row").toggle(visible === 0);
+        });
+    });
+</script>
+{% endblock custom_js %}

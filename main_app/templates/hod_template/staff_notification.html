@@ -21,7 +21,6 @@
                                     <th>Full Name</th>
                                     <th>Email</th>
                                     <th>Gender</th>
-                                    <th>Course</th>
                                     <th>Avatar</th>
                                     <th>Action</th>
                                 </tr>
@@ -30,10 +29,9 @@
                                 {% for staff in allStaff %}
                                 <tr>
                                     <td>{{ forloop.counter }}</td>
-                                    <td>{{staff.last_name}}, {{staff.first_name}}</td>
+                                    <td>{{staff.first_name}} {{staff.last_name}}</td>
                                     <td>{{staff.email}}</td>
                                     <td>{{staff.gender}}</td>
-                                    <td>{{staff.staff.course.name}}</td>
                                     <td>
                                         {% if staff.profile_pic == ""  %}
                                         No Image
@@ -57,19 +55,20 @@
 <div class = "modal fade" id = "myModal" tabindex = "-1" role = "dialog" 
    aria-labelledby = "myModalLabel" aria-hidden = "true">
    
-   <div class = "modal-dialog">
+   <div class = "modal-dialog modal-dialog-centered">
       <div class = "modal-content">
-         
+
          <div class = "modal-header">Send Notification
             <button type = "button" class = "btn-close" data-bs-dismiss = "modal" aria-hidden = "true">
             </button>
-            
-           
+
+
          </div>
-         
+
          <div class = "modal-body">
             <div class="form-group">
-                <input type="text" id="message" class='form-control'>
+                <label for="message">Message</label>
+                <textarea id="message" rows="4" class='form-control' placeholder="Type your message..."></textarea>
                 <input type="hidden"  id="staff_id" class='form-control'>
             </div>
          </div>
@@ -107,6 +106,9 @@
           return cookieValue;
       }
       const csrftoken = getCookie('csrftoken');
+      // Move the modal out of the glass-theme (backdrop-filter) container so it
+      // sits above its own backdrop and stays interactive.
+      $('#myModal').appendTo('body');
       $(".show_notification").click(function(){
           $("#staff_id").val($(this).val())
       })

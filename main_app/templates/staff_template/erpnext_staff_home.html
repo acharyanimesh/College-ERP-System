@@ -118,6 +118,44 @@
         </div>
     </div>
 
+    <!-- Assigned Subjects -->
+    <div class="row">
+        <div class="col-12">
+            <div class="erpnext-card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-book me-2"></i>
+                        My Assigned Subjects
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Subject</th>
+                                <th>Course(s)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for subject in assigned_subjects %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ subject.name }}</td>
+                                <td>{% for c in subject.courses.all %}<span title="{{ c.name }}">{{ c.short_name }}</span>{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">—</span>{% endfor %}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">No subjects assigned to you yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Activities -->
     <div class="row">
         <div class="col-12">
@@ -198,8 +236,8 @@
 
         // Pie Chart Creator Function
         function createPieChart() {
-            const isDarkMode = document.body.classList.contains('dark-mode');
-            const textColor = isDarkMode ? '#e0e0e0' : '#262626';
+            const isDarkMode = document.body.classList.contains('dark-mode') || document.body.classList.contains('glass-theme');
+            const textColor = isDarkMode ? '#e8f1f7' : '#262626';
             
             const pieCtx = document.getElementById('pieChart').getContext('2d');
             const pieChart = new Chart(pieCtx, {
@@ -222,7 +260,8 @@
                             labels: {
                                 padding: 20,
                                 usePointStyle: true,
-                                color: textColor
+                                color: textColor,
+                                font: { size: 14, weight: '600' }
                             }
                         }
                     }
@@ -239,8 +278,8 @@
 
         // Bar Chart Creator Function
         function createBarChart() {
-            const isDarkMode = document.body.classList.contains('dark-mode');
-            const textColor = isDarkMode ? '#e0e0e0' : '#262626';
+            const isDarkMode = document.body.classList.contains('dark-mode') || document.body.classList.contains('glass-theme');
+            const textColor = isDarkMode ? '#e8f1f7' : '#262626';
             const gridColor = isDarkMode ? '#404040' : '#f1f3f4';
             
             const barCtx = document.getElementById('barChart').getContext('2d');
@@ -271,7 +310,8 @@
                                 color: gridColor
                             },
                             ticks: {
-                                color: textColor
+                                color: textColor,
+                                font: { weight: '600' }
                             }
                         },
                         x: {
@@ -279,7 +319,8 @@
                                 display: false
                             },
                             ticks: {
-                                color: textColor
+                                color: textColor,
+                                font: { weight: '600' }
                             }
                         }
                     }

@@ -1,0 +1,272 @@
+{% extends 'main_app/base.html' %}
+{% load static %}
+{% block page_title %}{{page_title}}{% endblock page_title %}
+{% block content %}
+
+<style>
+    /* Student attendance list — glassy look matching the rest of the page */
+    .student-attendance-list .list-group-item {
+        padding: 0.85rem 1rem;
+        background: var(--glass-bg, rgba(7, 27, 43, 0.66));
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--glass-border, rgba(130, 200, 230, 0.16));
+        color: var(--glass-text, #e8f1f7);
+    }
+    .student-attendance-list .student-name {
+        font-weight: 600;
+        font-size: 1.05rem;
+        color: var(--glass-text, #e8f1f7);
+    }
+    .student-attendance-list .status-badge {
+        min-width: 90px;
+        text-align: center;
+        font-size: 0.85rem;
+        padding: 0.45rem 0.75rem;
+    }
+    /* Subject picker — clean pill buttons instead of a dropdown */
+    .subject-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .subject-picker .subject-btn {
+        font-weight: 500;
+        border-radius: 6px;
+        padding: 0.45rem 1rem;
+    }
+    .subject-picker .subject-btn.active {
+        background: var(--primary-color, #5e64ff);
+        border-color: var(--primary-color, #5e64ff);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(94, 100, 255, 0.35);
+    }
+</style>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card card-dark">
+                    <div class="card-header">
+                        <h3 class="card-title">{{page_title}}</h3>
+                    </div>
+                    <div class="card-body">
+
+                        <div class="form-group">
+                            <label>Shift</label>
+                            <select name="shift" id='shift' class="form-control">
+                                {% for value, label in shifts %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Subject</label>
+                            <div class="subject-picker" id="subject_picker">
+                                {% for subject in subjects %}
+                                <button type="button" class="btn btn-outline-primary subject-btn"
+                                        data-id="{{ subject.id }}"
+                                        data-morning="{{ subject.morning|yesno:'1,0' }}"
+                                        data-day="{{ subject.day|yesno:'1,0' }}"
+                                        data-assignments='{{ subject.assignments_json }}'>{{ subject.name }}</button>
+                                {% empty %}
+                                <span class="text-muted">You are not assigned to any subjects.</span>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" id="subject" value="">
+                            <small class="text-muted">Click a subject you teach. Only those valid for the selected shift are shown.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Course</label>
+                            <select name="course" class="form-control" id='course'>
+                                <option value="">----</option>
+                                {% for course in courses  %}
+                                <option value="{{course.id}}">{{course.short_name}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Semester</label>
+                            <select name="semester" id='semester' class="form-control">
+                                <option value="">----</option>
+                                {% for sem in semesters %}
+                                <option value="{{ sem }}">Semester {{ sem }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Only semesters you teach are listed; it is set automatically when you pick a subject.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <div style="display: none;" class="alert alert-danger" id='error_attendance'></div>
+                            <button type="button" id='fetch_attendance' class="btn btn-success btn-block">Fetch Attendance</button>
+                        </div>
+
+                        <div class="form-group" style="display: none;" id="attendance_block">
+                            <div class="form-group">
+                                <label>Attendance Date</label>
+                                <select name="attendance_date" id='attendance_date' class="form-control"></select>
+                            </div>
+                            <div id='student_data'></div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}
+
+
+{% block custom_js %}
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    $(document).ready(function () {
+
+        // Show only the subject buttons this teacher takes in the selected shift.
+        function filterSubjectsByShift() {
+            var shift = $("#shift").val();
+            $(".subject-btn").each(function () {
+                var ok = ($(this).data(shift) == 1);
+                $(this).toggle(ok);
+                if (!ok && $(this).hasClass('active')) {
+                    $(this).removeClass('active');
+                    $("#subject").val("");
+                }
+            });
+        }
+        $("#shift").on('change', function () {
+            filterSubjectsByShift();
+            autoSetSemester();
+        });
+        filterSubjectsByShift();
+
+        // Select a subject by clicking its button.
+        $(document).on('click', '.subject-btn', function () {
+            $(".subject-btn").removeClass('active');
+            $(this).addClass('active');
+            $("#subject").val($(this).data('id'));
+            autoSetSemester();
+        });
+
+        // Auto-pick the semester the subject is taught at once it is unambiguous.
+        function autoSetSemester() {
+            var $sel = $(".subject-btn.active");
+            if (!$sel.length) { return; }
+            var assignments = $sel.data('assignments') || [];
+            var course = $("#course").val();
+            var shift = $("#shift").val();
+            var sems = [];
+            for (var i = 0; i < assignments.length; i++) {
+                var a = assignments[i];
+                if (a.shifts.indexOf(shift) === -1) { continue; }
+                if (course && String(a.course) !== String(course)) { continue; }
+                if (a.semester != null && sems.indexOf(a.semester) === -1) { sems.push(a.semester); }
+            }
+            if (sems.length === 1) { $("#semester").val(String(sems[0])); }
+        }
+        $("#course").on('change', autoSetSemester);
+
+        $("#fetch_attendance").click(function () {
+            var subject = $("#subject").val()
+            var course = $("#course").val()
+            var semester = $("#semester").val()
+            var shift = $("#shift").val()
+            if (subject.length < 1 || course.length < 1 || semester.length < 1 || shift.length < 1) {
+                $("#error_attendance").html("Kindly choose subject, course, semester and shift")
+                $("#attendance_block").hide()
+                $("#error_attendance").show()
+                return false
+            }
+            $.ajax({
+                url: "{% url 'get_attendance' %}",
+                type: 'POST',
+                headers: { 'X-CSRFToken': csrftoken },
+                data: {
+                    subject: subject,
+                    course: course,
+                    semester: semester,
+                    shift: shift,
+                    include_locked: '1'
+                }
+            }).done(function (response) {
+                var json_data = JSON.parse(response)
+                if (json_data.length > 0) {
+                    var html = "";
+                    for (key in json_data) {
+                        html += "<option value='" + json_data[key]['id'] + "'>" + json_data[key]['attendance_date'] + "</option>"
+                    }
+                    $("#attendance_date").html(html)
+                    $("#error_attendance").hide().html("")
+                    $("#attendance_block").show()
+                    loadStudents()
+                } else {
+                    $("#error_attendance").html("No attendance has been recorded for this class yet.").show()
+                    $("#attendance_date").html("")
+                    $("#attendance_block").hide()
+                }
+            }).fail(function () {
+                $("#error_attendance").html("Error while fetching data").show()
+                $("#attendance_block").hide()
+            })
+        })
+
+        function loadStudents() {
+            var attendance_date = $("#attendance_date").val()
+            $("#student_data").html(null)
+            if (!attendance_date) { return false; }
+            $.ajax({
+                url: "{% url 'get_student_attendance' %}",
+                type: 'POST',
+                headers: { 'X-CSRFToken': csrftoken },
+                data: { attendance_date_id: attendance_date }
+            }).done(function (response) {
+                var json_data = JSON.parse(response)
+                if (json_data.length < 1) {
+                    $("#student_data").html("<hr/><p class='text-muted'>No students found for this date.</p>")
+                    return;
+                }
+                var div_data = "<hr/><div class='form-group'><label>Student Attendance</label>"
+                div_data += "<div class='list-group student-attendance-list'>"
+                for (key in json_data) {
+                    var status = json_data[key]['status'];
+                    var late = json_data[key]['late'];
+                    var badge, text;
+                    if (!status) { badge = 'badge-danger'; text = 'Absent'; }
+                    else if (late) { badge = 'badge-warning'; text = 'Late'; }
+                    else { badge = 'badge-success'; text = 'Present'; }
+                    var roll = json_data[key]['roll_number'] ? " <small class='text-muted'>(Roll: " + json_data[key]['roll_number'] + ")</small>" : "";
+                    div_data += "<div class='list-group-item d-flex justify-content-between align-items-center flex-wrap'>"
+                        + "<span class='student-name'>" + json_data[key]['name'] + roll + "</span>"
+                        + "<span class='badge " + badge + " status-badge'>" + text + "</span>"
+                        + "</div>"
+                }
+                div_data += "</div></div>"
+                $("#student_data").html(div_data)
+            }).fail(function () {
+                $("#error_attendance").html("Error in fetching students").show()
+            })
+        }
+        $("#attendance_date").on('change', loadStudents)
+    })
+</script>
+{% endblock custom_js %}

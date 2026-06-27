@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views import View
 from django.contrib import messages
+from django.db.models import Q
 from .models import Subject, Staff, Student, StudentResult
 from .forms import EditResultForm
 from django.urls import reverse
@@ -10,7 +11,8 @@ class EditResultView(View):
     def get(self, request, *args, **kwargs):
         resultForm = EditResultForm()
         staff = get_object_or_404(Staff, admin=request.user)
-        resultForm.fields['subject'].queryset = Subject.objects.filter(staff=staff)
+        resultForm.fields['subject'].queryset = Subject.objects.filter(
+            Q(coursesubject__morning_staff=staff) | Q(coursesubject__day_staff=staff)).distinct()
         context = {
             'form': resultForm,
             'page_title': "Edit Student's Result"

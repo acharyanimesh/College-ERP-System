@@ -2,6 +2,7 @@
     {% csrf_token %}
     <div class="card-body">
 
+        {{ form.non_field_errors }}
 
         {% for field in form  %}
         <div class="form-group">

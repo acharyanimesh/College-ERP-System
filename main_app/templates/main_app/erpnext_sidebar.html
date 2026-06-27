@@ -44,7 +44,7 @@
 
         <h6 class="nav-section-title">Academic Management</h6>
         
-        <div class="nav-item has-submenu {% if 'course' in request.path %}open{% endif %}">
+        <div class="nav-item has-submenu {% if 'course' in request.path or 'subject' in request.path %}open{% endif %}">
             <a href="#" class="nav-link">
                 <i class="nav-icon fas fa-graduation-cap"></i>
                 <span class="nav-text">Courses</span>
@@ -59,30 +59,14 @@
                 </div>
                 <div class="nav-item">
                     {% url 'manage_course' as manage_course %}
-                    <a href="{{ manage_course }}" class="nav-link {% if manage_course == request.path or 'edit_course' in request.path %}active{% endif %}">
+                    <a href="{{ manage_course }}" class="nav-link {% if manage_course == request.path or 'edit_course' in request.path or 'subject/manage' in request.path %}active{% endif %}">
                         <span class="nav-text">Manage Courses</span>
                     </a>
                 </div>
-            </div>
-        </div>
-
-        <div class="nav-item has-submenu {% if 'subject' in request.path %}open{% endif %}">
-            <a href="#" class="nav-link">
-                <i class="nav-icon fas fa-book"></i>
-                <span class="nav-text">Subjects</span>
-                <i class="nav-arrow fas fa-chevron-right"></i>
-            </a>
-            <div class="nav-submenu">
                 <div class="nav-item">
                     {% url 'add_subject' as add_subject %}
                     <a href="{{ add_subject }}" class="nav-link {% if add_subject == request.path %}active{% endif %}">
                         <span class="nav-text">Add Subject</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    {% url 'manage_subject' as manage_subject %}
-                    <a href="{{ manage_subject }}" class="nav-link {% if manage_subject == request.path or 'edit_subject' in request.path %}active{% endif %}">
-                        <span class="nav-text">Manage Subjects</span>
                     </a>
                 </div>
             </div>
@@ -141,6 +125,14 @@
             <a href="{{ manage_student }}" class="nav-link {% if manage_student == request.path or 'edit_student' in request.path %}active{% endif %}">
                 <i class="nav-icon fas fa-users"></i>
                 <span class="nav-text">Manage Students</span>
+            </a>
+        </div>
+
+        <div class="nav-item">
+            {% url 'passed_out_students' as passed_out_students %}
+            <a href="{{ passed_out_students }}" class="nav-link {% if 'passed-out' in request.path %}active{% endif %}">
+                <i class="nav-icon fas fa-user-graduate"></i>
+                <span class="nav-text">Passed Out Students</span>
             </a>
         </div>
 
@@ -259,6 +251,14 @@
             <a href="{{ staff_update_attendance }}" class="nav-link {% if staff_update_attendance == request.path %}active{% endif %}">
                 <i class="nav-icon fas fa-calendar-edit"></i>
                 <span class="nav-text">Update Attendance</span>
+            </a>
+        </div>
+
+        <div class="nav-item">
+            {% url 'staff_view_attendance' as staff_view_attendance %}
+            <a href="{{ staff_view_attendance }}" class="nav-link {% if staff_view_attendance == request.path %}active{% endif %}">
+                <i class="nav-icon fas fa-clipboard-list"></i>
+                <span class="nav-text">View Attendance</span>
             </a>
         </div>
 

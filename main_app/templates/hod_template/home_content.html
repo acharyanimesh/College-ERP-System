@@ -49,7 +49,7 @@
             </div>
             <div class="stat-number" style="color: var(--danger-color);">{{ total_subject }}</div>
             <p class="stat-label">Total Subjects</p>
-            <a href="{% url 'manage_subject' %}" class="btn btn-primary btn-sm mt-2">
+            <a href="{% url 'manage_course' %}" class="btn btn-primary btn-sm mt-2">
                 <i class="fas fa-eye"></i> View All
             </a>
         </div>
@@ -186,8 +186,18 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Chart.js Configuration
         Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif';
-        Chart.defaults.color = '#262626';
-        
+
+        // On the admin glass/waves background, chart text & grid lines must be light to stay readable
+        const isAdminBg = document.body.classList.contains('admin-bg');
+        const chartTextColor = isAdminBg ? '#e8f1f7' : '#262626';
+        const chartGridColor = isAdminBg ? 'rgba(255, 255, 255, 0.12)' : '#f1f3f4';
+        Chart.defaults.color = chartTextColor;
+        // Pin legend label color too (base.html sets a light-mode default that would otherwise dim it)
+        Chart.defaults.plugins = Chart.defaults.plugins || {};
+        Chart.defaults.plugins.legend = Chart.defaults.plugins.legend || {};
+        Chart.defaults.plugins.legend.labels = Chart.defaults.plugins.legend.labels || {};
+        Chart.defaults.plugins.legend.labels.color = chartTextColor;
+
         // ERPNext-style color palette
         const colors = {
             primary: '#5e64ff',
@@ -199,6 +209,9 @@
             dark: '#262626'
         };
 
+        // Soft, muted palette for doughnuts — low contrast, easy on the eyes
+        const softPalette = ['#7fa8d4', '#8fcfb6', '#e6c98a', '#dd9a9a', '#86c5d9', '#b3a4dd', '#e0b48a', '#86c9b4'];
+
         // Staff vs Students Pie Chart
         const pieCtx = document.getElementById('pieChart').getContext('2d');
         new Chart(pieCtx, {
@@ -207,7 +220,7 @@
                 labels: ['Students', 'Staff'],
                 datasets: [{
                     data: [{{ total_students }}, {{ total_staff }}],
-                    backgroundColor: [colors.primary, colors.success],
+                    backgroundColor: [softPalette[0], softPalette[1]],
                     borderWidth: 0,
                     cutout: '60%'
                 }]
@@ -252,11 +265,19 @@
                 scales: {
                     y: {
                         beginAtZero: true,
+                        ticks: {
+                            color: chartTextColor,
+                            font: { weight: '600' }
+                        },
                         grid: {
-                            color: '#f1f3f4'
+                            color: chartGridColor
                         }
                     },
                     x: {
+                        ticks: {
+                            color: chartTextColor,
+                            font: { weight: '600' }
+                        },
                         grid: {
                             display: false
                         }
@@ -300,11 +321,19 @@
                 scales: {
                     y: {
                         beginAtZero: true,
+                        ticks: {
+                            color: chartTextColor,
+                            font: { weight: '600' }
+                        },
                         grid: {
-                            color: '#f1f3f4'
+                            color: chartGridColor
                         }
                     },
                     x: {
+                        ticks: {
+                            color: chartTextColor,
+                            font: { weight: '600' }
+                        },
                         grid: {
                             display: false
                         }
@@ -321,10 +350,7 @@
                 labels: {{ course_name_list|safe }},
                 datasets: [{
                     data: {{ student_count_list_in_course }},
-                    backgroundColor: [
-                        colors.primary, colors.success, colors.warning, 
-                        colors.danger, colors.info, '#6f42c1', '#fd7e14', '#20c997'
-                    ],
+                    backgroundColor: softPalette,
                     borderWidth: 0,
                     cutout: '60%'
                 }]

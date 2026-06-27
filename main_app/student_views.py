@@ -16,7 +16,7 @@ from .models import *
 
 def student_home(request):
     student = get_object_or_404(Student, admin=request.user)
-    total_subject = Subject.objects.filter(course=student.course).count()
+    total_subject = Subject.objects.filter(courses=student.course).count()
     total_attendance = AttendanceReport.objects.filter(student=student).count()
     total_present = AttendanceReport.objects.filter(student=student, status=True).count()
     if total_attendance == 0:  # Don't divide. DivisionByZero
@@ -27,7 +27,7 @@ def student_home(request):
     subject_name = []
     data_present = []
     data_absent = []
-    subjects = Subject.objects.filter(course=student.course)
+    subjects = Subject.objects.filter(courses=student.course)
     for subject in subjects:
         attendance = Attendance.objects.filter(subject=subject)
         present_count = AttendanceReport.objects.filter(
@@ -37,12 +37,18 @@ def student_home(request):
         subject_name.append(subject.name)
         data_present.append(present_count)
         data_absent.append(absent_count)
+    # Subject + the teacher for THIS student's shift (teachers are per course+shift).
+    course_subjects = list(CourseSubject.objects.filter(course=student.course).select_related(
+        'subject', 'morning_staff__admin', 'day_staff__admin').order_by('semester', 'subject__name'))
+    for cs in course_subjects:
+        cs.shift_teacher = cs.staff_for_shift(student.shift)
     context = {
         'total_attendance': total_attendance,
         'percent_present': percent_present,
         'percent_absent': percent_absent,
         'total_subject': total_subject,
         'subjects': subjects,
+        'course_subjects': course_subjects,
         'data_present': data_present,
         'data_absent': data_absent,
         'data_name': subject_name,
@@ -58,7 +64,7 @@ def student_view_attendance(request):
     if request.method != 'POST':
         course = get_object_or_404(Course, id=student.course.id)
         context = {
-            'subjects': Subject.objects.filter(course=course),
+            'subjects': Subject.objects.filter(courses=course),
             'page_title': 'View Attendance'
         }
         return render(request, 'student_template/student_view_attendance.html', context)
@@ -199,9 +205,30 @@ def student_view_notification(request):
 
 def student_view_result(request):
     student = get_object_or_404(Student, admin=request.user)
-    results = StudentResult.objects.filter(student=student)
+    course = student.course
+    # Semesters that actually have subjects for this student's course.
+    semesters = list(CourseSubject.objects.filter(course=course)
+                     .exclude(semester__isnull=True)
+                     .values_list('semester', flat=True).distinct().order_by('semester'))
+    # Selected semester (default to the first available one).
+    try:
+        selected = int(request.GET.get('semester'))
+    except (TypeError, ValueError):
+        selected = semesters[0] if semesters else None
+
+    rows = []
+    if selected is not None:
+        cs_list = CourseSubject.objects.filter(
+            course=course, semester=selected).select_related('subject').order_by('subject__name')
+        result_map = {r.subject_id: r for r in StudentResult.objects.filter(
+            student=student, subject_id__in=[cs.subject_id for cs in cs_list])}
+        for cs in cs_list:
+            rows.append({'subject': cs.subject, 'result': result_map.get(cs.subject_id)})
+
     context = {
-        'results': results,
+        'semesters': semesters,
+        'selected': selected,
+        'rows': rows,
         'page_title': "View Results"
     }
     return render(request, "student_template/student_view_result.html", context)

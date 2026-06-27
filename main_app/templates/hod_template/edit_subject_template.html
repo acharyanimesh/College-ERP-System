@@ -2,22 +2,186 @@
 {% load static %}
 {% block page_title %}{{page_title}}{% endblock page_title %}
 
+{% block custom_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .select2-container { width: 100% !important; }
+    .select2-container--default .select2-selection--multiple {
+        background-color: #fff;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        min-height: 40px;
+        padding: 3px 6px;
+        color: var(--dark-color);
+    }
+    .select2-container--default.select2-container--focus .select2-selection--multiple {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(94, 100, 255, 0.1);
+    }
+    .select2-container--default .select2-selection--multiple .select2-selection__choice {
+        background-color: var(--primary-color);
+        border: none;
+        color: #fff;
+        border-radius: 4px;
+        padding: 2px 8px;
+    }
+    .select2-container--default .select2-selection__choice__remove { color: #fff !important; margin-right: 4px; }
+    .select2-container--default .select2-search__field { color: var(--dark-color); }
+    .select2-dropdown { background-color: #fff; border: 1px solid var(--border-color); color: var(--dark-color); }
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+        background-color: var(--primary-color); color: #fff;
+    }
+
+    .dark-mode .select2-container--default .select2-selection--multiple,
+    .dark-mode .select2-dropdown {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+        color: var(--text-color);
+    }
+    .dark-mode .select2-container--default .select2-selection--multiple { color: var(--text-color); }
+    .dark-mode .select2-container--default .select2-search__field { color: var(--text-color); }
+    .dark-mode .select2-results__option { color: var(--text-color); }
+
+    .glass-theme .select2-container--default .select2-selection--multiple {
+        background-color: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--glass-border);
+        color: var(--glass-text);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+    .glass-theme .select2-container--default.select2-container--focus .select2-selection--multiple {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: var(--glass-accent);
+        box-shadow: 0 0 0 0.2rem rgba(90, 209, 244, 0.2);
+    }
+    .glass-theme .select2-container--default .select2-selection__choice {
+        background-color: rgba(90, 209, 244, 0.18);
+        border: 1px solid rgba(90, 209, 244, 0.32);
+        color: var(--glass-text);
+    }
+    .glass-theme .select2-container--default .select2-selection__choice__remove { color: var(--glass-text) !important; }
+    .glass-theme .select2-container--default .select2-search__field { color: var(--glass-text); }
+    .glass-theme .select2-container--default .select2-selection__placeholder { color: var(--glass-muted); }
+    .glass-theme .select2-dropdown {
+        background-color: var(--glass-bg-strong);
+        border: 1px solid var(--glass-border);
+        color: var(--glass-text);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .glass-theme .select2-results__option { color: var(--glass-text); }
+    .glass-theme .select2-container--default .select2-results__option--highlighted[aria-selected] {
+        background-color: rgba(90, 209, 244, 0.2);
+        color: #ffffff;
+    }
+
+    /* Kill the default white .table-responsive panel so the table is glassy */
+    .table-responsive {
+        background: transparent !important;
+        border: none !important;
+    }
+    /* Course/semester table: glassy, matching the Manage Courses table */
+    .course-semester-table,
+    .course-semester-table td,
+    .course-semester-table th {
+        background-color: transparent !important;
+        color: var(--glass-text) !important;
+        border-color: var(--glass-border) !important;
+    }
+    .course-semester-table thead th {
+        background-color: rgba(0, 0, 0, 0.28) !important;
+    }
+    .course-semester-table tbody tr:hover td {
+        background-color: rgba(90, 209, 244, 0.12) !important;
+        color: #ffffff !important;
+    }
+    .course-semester-table input.form-control {
+        background-color: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid var(--glass-border) !important;
+        color: var(--glass-text) !important;
+    }
+    .course-semester-table input.form-control::placeholder {
+        color: var(--glass-muted) !important;
+        opacity: 1;
+    }
+    .course-semester-table input.form-control:focus {
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        border-color: var(--glass-accent) !important;
+        color: #ffffff !important;
+    }
+</style>
+{% endblock custom_css %}
+
 {% block content %}
 
 <section class="content">
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-12">
-                <!-- general form elements -->
-                <div class="card card-dark">
+                <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">{{page_title}}</h3>
                     </div>
 
-                    {% include "main_app/form_template.html" with messages=messages  form=form button_text="Edit Subject"%}
-                </div>
-                <!-- /.card -->
+                    <form role="form" method="POST">
+                        {% csrf_token %}
+                        <div class="card-body">
+                            <div class="form-group">
+                                {{ form.name.errors }}
+                                {{ form.name.label_tag }}
+                                {{ form.name }}
+                            </div>
+                            <div class="form-group">
+                                {{ form.code.errors }}
+                                {{ form.code.label_tag }}
+                                {{ form.code }}
+                            </div>
+                            <div class="form-group">
+                                {{ form.credit_hours.errors }}
+                                {{ form.credit_hours.label_tag }}
+                                {{ form.credit_hours }}
+                            </div>
 
+                            <hr/>
+                            <label class="font-weight-bold mb-1">Courses &amp; Semesters</label>
+                            <p class="text-muted">
+                                Set the semester number for each course this subject is taught in.
+                                Clear a course to remove the subject from it. The same subject can
+                                sit in a <em>different</em> semester in each course.
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover course-semester-table">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th>Course</th>
+                                            <th style="width: 200px;">Semester</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in course_rows %}
+                                        <tr>
+                                            <td title="{{ row.course.name }}">{{ row.course.short_name }}</td>
+                                            <td>
+                                                <input type="number" name="semester_{{ row.course.id }}"
+                                                       value="{{ row.semester }}" class="form-control"
+                                                       min="1" {% if row.course.semesters %}max="{{ row.course.semesters }}"{% endif %}
+                                                       placeholder="— not in this course —">
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="2" class="text-center">No courses available. Add a course first.</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-success btn-block">Edit Subject</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

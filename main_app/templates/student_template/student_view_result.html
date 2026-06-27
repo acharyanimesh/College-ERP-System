@@ -8,34 +8,59 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-12">
-                <!-- general form elements -->
-       
-                <!-- /.card -->
-<div class="card card-dark">
-    <div class="card-header"><h3 class="card-title">{{page_title}}</h3>
-    </div>
-   <div class="table p-2" style="overflow-x: auto; overflow-y: auto; max-height: 600px;">
+                <div class="card card-dark">
+                    <div class="card-header">
+                        <h3 class="card-title">{{page_title}}</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if semesters %}
+                        <form method="get" class="form-inline mb-3" id="semester_form">
+                            <label for="semester" class="mr-2">Semester</label>
+                            <select name="semester" id="semester" class="form-control"
+                                    onchange="document.getElementById('semester_form').submit()">
+                                {% for sem in semesters %}
+                                <option value="{{ sem }}" {% if sem == selected %}selected{% endif %}>Semester {{ sem }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
 
-       <table class="table table-bordered" style="min-width: 600px;">
-           <tr>
-               <th>ID</th>
-               <th>Subject</th>
-               <th>Test</th>
-               <th>Exam</th>
-               <th>Total</th>
-        </tr>
-        {% for result in results %}
-        <tr>
-            <td>{{forloop.counter}}</td>
-            <td>{{ result.subject }}</td>
-            <td>{{ result.test }}</td>
-            <td>{{ result.exam }}</td>
-            <td>{{ result.test|add:result.exam }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
-    </div>
+                        <div class="table p-0" style="overflow-x: auto; overflow-y: auto; max-height: 600px;">
+                            <table class="table table-bordered" style="min-width: 600px;">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Subject</th>
+                                        <th>Test</th>
+                                        <th>Exam</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in rows %}
+                                    <tr>
+                                        <td>{{ forloop.counter }}</td>
+                                        <td>{{ row.subject.name }}</td>
+                                        {% if row.result %}
+                                        <td>{{ row.result.test }}</td>
+                                        <td>{{ row.result.exam }}</td>
+                                        <td>{{ row.result.test|add:row.result.exam }}</td>
+                                        {% else %}
+                                        <td colspan="3" class="text-muted">Not published yet</td>
+                                        {% endif %}
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center">No subjects found for this semester.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No subjects are assigned to your course yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>

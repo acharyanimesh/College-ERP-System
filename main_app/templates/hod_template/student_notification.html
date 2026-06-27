@@ -3,7 +3,6 @@
 {% block page_title %}{{page_title}}{% endblock page_title %}
 
 {% block content %}
-
 <section class="content">
     <div class="container-fluid">
         <div class="row">
@@ -12,141 +11,129 @@
                     <div class="card-header">
                         <h3 class="card-title">{{page_title}}</h3>
                     </div>
-                    <!-- /.card-header -->
                     <div class="card-body">
-                        <table id="example2" class="table table-bordered table-hover">
-                            <thead class="thead-dark">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Full Name</th>
-                                    <th>Email</th>
-                                    <th>Gender</th>
-                                    <th>Course</th>
-                                    <th>Avatar</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for student in students %}
-                                <tr>
-                                    <td>{{ forloop.counter }}</td>
-                                    <td>{{student.last_name}}, {{student.first_name}}</td>
-                                    <td>{{student.email}}</td>
-                                    <td>{{student.gender}}</td>
-                                    <td>{{student.student.course.name}}</td>
-                                    <td>
-                                        {% if student.profile_pic == ""  %}
-                                        No Image
-                                        {% else %}
-                                        <img class="img img-fluid mb-2" height="56" width="56"
-                                            src="{{student.profile_pic}}" alt="">
-                                        {% endif %}
-                                    </td>
-                                    <td><button data-bs-toggle="modal" data-bs-target="#myModal" class="btn btn-primary show_notification" value="{{student.id}}">Send Notification</button> 
-                                    </td>
-                                </tr>
+                        <div class="form-group" style="max-width: 420px;">
+                            <input type="text" id="student_search" class="form-control"
+                                   placeholder="Search any student by name or roll number to notify...">
+                        </div>
+
+                        <!-- Search results (shown only while searching) -->
+                        <div id="search_results" style="display: none;">
+                            <table class="table table-bordered table-hover">
+                                <thead class="thead-dark">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Full Name</th>
+                                        <th>Course</th>
+                                        <th>Semester</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for s in search_students %}
+                                    <tr class="search-row" data-name="{{ s.name|lower }}" data-roll="{{ s.roll|lower }}">
+                                        <td class="row-num"></td>
+                                        <td>{{ s.name }}</td>
+                                        <td title="{{ s.course_full }}">{{ s.course }}</td>
+                                        <td>{{ s.semester }}</td>
+                                        <td><button data-bs-toggle="modal" data-bs-target="#myModal" class="btn btn-sm btn-primary show_notification" value="{{ s.id }}">Send Notification</button></td>
+                                    </tr>
+                                    {% endfor %}
+                                    <tr id="no_match_row" style="display: none;">
+                                        <td colspan="5" class="text-center">No students match your search.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Browse by course (shown when not searching) -->
+                        <div id="course_browse">
+                            <p class="text-muted">Select a course, then a semester, to notify its students &mdash; or search above.</p>
+                            <div class="row">
+                                {% for item in course_data %}
+                                <div class="col-md-4 col-sm-6 mb-4 d-flex">
+                                    <a href="{% url 'notify_student_by_course' item.course.id %}" class="text-decoration-none w-100">
+                                        <div class="card card-outline card-primary h-100 mb-0 shadow-sm">
+                                            <div class="card-body d-flex justify-content-between align-items-center" style="padding: 1.25rem 1.5rem;">
+                                                <span class="font-weight-bold" style="font-size: 1.05rem;" title="{{ item.course.name }}">{{ item.course.short_name }}</span>
+                                                <span class="badge badge-info badge-pill" style="padding: 0.5em 0.85em; font-size: 0.85rem;">{{ item.student_count }}</span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                                {% empty %}
+                                <div class="col-12"><p>No courses available.</p></div>
                                 {% endfor %}
-                            </tbody>
-                        </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
-<div class = "modal fade" id = "myModal" tabindex = "-1" role = "dialog" 
-   aria-labelledby = "myModalLabel" aria-hidden = "true">
-   
-   <div class = "modal-dialog">
-      <div class = "modal-content">
-         
-         <div class = "modal-header">Send Notification
-            <button type = "button" class = "btn-close" data-bs-dismiss = "modal" aria-hidden = "true">
-            </button>
-            
-           
-         </div>
-         
-         <div class = "modal-body">
-            <div class="form-group">
-                <input type="text" id="message" class='form-control'>
-                <input type="hidden"  id="student_id" class='form-control'>
-            </div>
-         </div>
-         
-         <div class = "modal-footer">
-            <button type = "button" class = "btn btn-danger" data-bs-dismiss = "modal">
-               Close
-            </button>
-            
-            <button type = "button" id='send' class = "btn btn-success send_notification">
-               Send Notification
-            </button>
-         </div>
-         
-      </div><!-- /.modal-content -->
-   </div><!-- /.modal-dialog -->
-  
-</div><!-- /.modal -->
+
+{% include "hod_template/_notify_student_modal.html" %}
 {% endblock content %}
+
 {% block custom_js %}
-  <script>
-      // Get CSRF token
-      function getCookie(name) {
-          let cookieValue = null;
-          if (document.cookie && document.cookie !== '') {
-              const cookies = document.cookie.split(';');
-              for (let i = 0; i < cookies.length; i++) {
-                  const cookie = cookies[i].trim();
-                  if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                      cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                      break;
-                  }
-              }
-          }
-          return cookieValue;
-      }
-      const csrftoken = getCookie('csrftoken');
-      
-      $(".show_notification").click(function(){
-          $("#student_id").val($(this).val())
-      })
-      $(".send_notification").click(function(){
-          var id = $("#student_id").val()
-          var message = $("#message").val()
-          if (message.trim() === '') {
-              alert("Please enter a message before sending.");
-              return;
-          }
-          sendNotification(id,message);
-      })
-    function sendNotification(id,message){
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+    $('#myModal').appendTo('body');
+
+    // Toggle between "search results" and "browse by course".
+    $("#student_search").on("keyup", function () {
+        var query = $(this).val().toLowerCase().trim();
+        if (query === "") {
+            $("#search_results").hide();
+            $("#course_browse").show();
+            return;
+        }
+        $("#course_browse").hide();
+        $("#search_results").show();
+        var visible = 0;
+        $(".search-row").each(function () {
+            var match = $(this).data("name").indexOf(query) > -1 || $(this).data("roll").indexOf(query) > -1;
+            $(this).toggle(match);
+            if (match) { $(this).find(".row-num").text(++visible); }
+        });
+        $("#no_match_row").toggle(visible === 0);
+    });
+
+    $(document).on("click", ".show_notification", function () {
+        $("#student_id").val($(this).val());
+        $("#message").val("");
+    });
+    $(".send_notification").click(function () {
+        var id = $("#student_id").val();
+        var message = $("#message").val();
+        if (message.trim() === '') { alert("Please enter a message before sending."); return; }
+        sendNotification(id, message);
+    });
+    function sendNotification(id, message) {
         $.ajax({
             url: "{% url 'send_student_notification' %}",
             type: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken
-            },
-            data: {
-                id: id,
-                message:message
-            }
+            headers: { 'X-CSRFToken': csrftoken },
+            data: { id: id, message: message }
         }).done(function (response) {
-           
-                
-            if (response == 'True'){
-                alert("Notification Sent");
-                location.reload();
-              }else{
-                alert("Notification could not be saved. Please try again.");
-              }
-               
-           
-        }).fail(function (response) {
-            alert("Error in sending notification")
-        })
-
+            if (response == 'True') { alert("Notification Sent"); location.reload(); }
+            else { alert("Notification could not be saved. Please try again."); }
+        }).fail(function () { alert("Error in sending notification"); });
     }
-
-  </script>
+</script>
 {% endblock custom_js %}
