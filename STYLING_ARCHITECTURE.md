@@ -309,9 +309,16 @@ current pages, so editing them changes nothing. Knowing this saves you confusion
 ### A note on `collectstatic` (production only)
 
 In development (`DEBUG = True`, which is the current setting) Django serves CSS
-straight from `static/`, so your edits show up on refresh. The project uses
-WhiteNoise for production, where you'd run `python manage.py collectstatic`. You
-do **not** need that while developing locally.
+straight from `static/`, so your edits show up on refresh. WhiteNoise is still
+configured (`whitenoise.middleware.WhiteNoiseMiddleware` + `CompressedManifestStaticFilesStorage`
+in `settings.py`), so for a production build you'd run `python manage.py collectstatic`.
+You do **not** need that while developing locally.
+
+> **Deployment note:** the old Heroku deploy files (`Procfile`, `LICENSE`) were
+> **removed**. This project is no longer deployed as a hosted service — it is run
+> locally and **shared between devices via git with the SQLite DB committed** (see
+> §20). `gunicorn`/`whitenoise` remain in `requirements.txt` but aren't wired to a
+> host anymore.
 
 ---
 
@@ -504,3 +511,26 @@ from the subject's per-course `CourseSubject.semester` (JS `data-assignments`).
   (`make_password(...)`) and reuse the string — per-user hashing is the bottleneck.
   Ensure any `unique_*` helper actually increments (a missing `n += 1` caused an
   infinite loop once).
+
+## 20. Repo, environment & cross-device workflow
+
+How the project is packaged and moved between machines (newer than the rest of
+Part 2; see also `README.md`, which is the user-facing version of this).
+
+- **Python version:** **3.12** (local `venv` runs 3.12.3). Django is **3.1.1**
+  (pinned, old — keep code compatible with it). Deps are pinned in
+  `requirements.txt`; setup is `python3 -m venv venv` → `source venv/bin/activate`
+  → `pip install -r requirements.txt` → `python manage.py runserver`.
+- **The database is committed.** `db.sqlite3` is **intentionally tracked in git**
+  (the `.gitignore` says so) so data + the admin login travel between devices. No
+  `migrate`/seed step is needed on a fresh clone — the data is already there.
+  - ⚠️ **Consequence:** don't edit on two devices at once. Finish on one →
+    `git push` → `git pull` on the other before continuing, or the DB conflicts.
+  - **Backups** (`db.sqlite3.bak*`) and `venv/` are git-ignored.
+- **Secrets in the repo:** `SECRET_KEY` and a Firebase key live in the code, so the
+  **repository must stay private**.
+- **`README.md`** is the onboarding doc (clone → venv → install → run, login
+  credentials, and the git workflow). This file (`STYLING_ARCHITECTURE.md`) is the
+  deep reference it links to.
+- **Removed files:** `Procfile` and `LICENSE` were deleted — the project is no
+  longer set up for Heroku deployment (see the deployment note in §8).
