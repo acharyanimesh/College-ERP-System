@@ -90,18 +90,15 @@ def get_attendance(request):
     shift = request.POST.get('shift')
     try:
         subject = get_object_or_404(Subject, id=subject_id)
-        attendance = Attendance.objects.filter(subject=subject, shift=shift)
+        # Scope to the exact class. The same subject can be taught in several
+        # courses at different semesters (which may even share an intake session),
+        # so course + semester — not session — is what keeps each class separate.
+        attendance = Attendance.objects.filter(
+            subject=subject, shift=shift, course_id=course_id, semester=semester)
         # The Update screen only edits unlocked records; the View screen
         # (include_locked=1) shows every confirmed/saved record.
         if request.POST.get('include_locked') != '1':
             attendance = attendance.filter(locked=False)
-        # Scope to the current cohort's intake when we can identify it, so the
-        # date list matches the class being updated (mirrors take-attendance).
-        cohort = Student.objects.filter(
-            course_id=course_id, current_semester=semester, shift=shift, passed_out=False)
-        first_student = cohort.first()
-        if first_student and first_student.session_id:
-            attendance = attendance.filter(session=first_student.session)
         attendance_list = []
         for attd in attendance.order_by('-date'):
             label = "%s (%s)" % (attd.date, attd.get_shift_display())

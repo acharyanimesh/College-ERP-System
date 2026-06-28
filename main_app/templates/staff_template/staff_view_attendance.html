@@ -70,7 +70,7 @@
                                         data-id="{{ subject.id }}"
                                         data-morning="{{ subject.morning|yesno:'1,0' }}"
                                         data-day="{{ subject.day|yesno:'1,0' }}"
-                                        data-assignments='{{ subject.assignments_json }}'>{{ subject.name }}</button>
+                                        data-classes='{{ subject.classes_json }}'>{{ subject.name }}</button>
                                 {% empty %}
                                 <span class="text-muted">You are not assigned to any subjects.</span>
                                 {% endfor %}
@@ -80,24 +80,13 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Course</label>
-                            <select name="course" class="form-control" id='course'>
+                            <label>Class (Course &amp; Semester)</label>
+                            <select name="class" class="form-control" id='class_select'>
                                 <option value="">----</option>
-                                {% for course in courses  %}
-                                <option value="{{course.id}}">{{course.short_name}}</option>
-                                {% endfor %}
                             </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Semester</label>
-                            <select name="semester" id='semester' class="form-control">
-                                <option value="">----</option>
-                                {% for sem in semesters %}
-                                <option value="{{ sem }}">Semester {{ sem }}</option>
-                                {% endfor %}
-                            </select>
-                            <small class="text-muted">Only semesters you teach are listed; it is set automatically when you pick a subject.</small>
+                            <input type="hidden" id="course" value="">
+                            <input type="hidden" id="semester" value="">
+                            <small class="text-muted">Pick a shift and subject first; classes you teach this subject in are listed.</small>
                         </div>
 
                         <div class="form-group">
@@ -142,6 +131,10 @@
 
     $(document).ready(function () {
 
+        // View shows history too, so inactive (no longer running) classes stay
+        // selectable here.
+        var RESTRICT_ACTIVE = false;
+
         // Show only the subject buttons this teacher takes in the selected shift.
         function filterSubjectsByShift() {
             var shift = $("#shift").val();
@@ -156,7 +149,7 @@
         }
         $("#shift").on('change', function () {
             filterSubjectsByShift();
-            autoSetSemester();
+            populateClasses();
         });
         filterSubjectsByShift();
 
@@ -165,26 +158,45 @@
             $(".subject-btn").removeClass('active');
             $(this).addClass('active');
             $("#subject").val($(this).data('id'));
-            autoSetSemester();
+            populateClasses();
         });
 
-        // Auto-pick the semester the subject is taught at once it is unambiguous.
-        function autoSetSemester() {
+        // Build the Class dropdown from the selected subject + shift. The option
+        // value carries "courseId|semester" so a subject shared across courses is
+        // never ambiguous. Inactive classes are kept (RESTRICT_ACTIVE is off) so
+        // past records remain viewable, but labelled "(inactive)".
+        function populateClasses() {
+            var $cls = $("#class_select");
+            $cls.html("<option value=''>----</option>");
+            $("#course").val(""); $("#semester").val("");
             var $sel = $(".subject-btn.active");
             if (!$sel.length) { return; }
-            var assignments = $sel.data('assignments') || [];
-            var course = $("#course").val();
+            var classes = $sel.data('classes') || [];
             var shift = $("#shift").val();
-            var sems = [];
-            for (var i = 0; i < assignments.length; i++) {
-                var a = assignments[i];
-                if (a.shifts.indexOf(shift) === -1) { continue; }
-                if (course && String(a.course) !== String(course)) { continue; }
-                if (a.semester != null && sems.indexOf(a.semester) === -1) { sems.push(a.semester); }
+            var added = 0;
+            for (var i = 0; i < classes.length; i++) {
+                var c = classes[i];
+                if (c.shift !== shift) { continue; }
+                if (c.semester == null) { continue; }
+                if (RESTRICT_ACTIVE && !c.active) { continue; }
+                var label = c.course_name + " — Semester " + c.semester + (c.active ? "" : " (inactive)");
+                $cls.append("<option value='" + c.course + "|" + c.semester + "'>" + label + "</option>");
+                added++;
             }
-            if (sems.length === 1) { $("#semester").val(String(sems[0])); }
+            if (added === 0) {
+                $cls.html("<option value=''>No classes for this subject/shift</option>");
+            }
         }
-        $("#course").on('change', autoSetSemester);
+        $("#class_select").on('change', function () {
+            var v = $(this).val();
+            if (v && v.indexOf('|') > -1) {
+                var parts = v.split('|');
+                $("#course").val(parts[0]);
+                $("#semester").val(parts[1]);
+            } else {
+                $("#course").val(""); $("#semester").val("");
+            }
+        });
 
         $("#fetch_attendance").click(function () {
             var subject = $("#subject").val()

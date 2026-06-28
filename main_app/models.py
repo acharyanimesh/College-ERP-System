@@ -223,6 +223,12 @@ class CourseSubject(models.Model):
 class Attendance(models.Model):
     session = models.ForeignKey(Session, on_delete=models.DO_NOTHING)
     subject = models.ForeignKey(Subject, on_delete=models.DO_NOTHING)
+    # A subject can be taught in several courses at different semesters, so the
+    # session alone does NOT identify a class (two courses can share an intake
+    # session). Storing the course + semester the attendance was taken for keeps
+    # each class's records separate when viewing/updating.
+    course = models.ForeignKey(Course, on_delete=models.DO_NOTHING, null=True, blank=True)
+    semester = models.PositiveSmallIntegerField(null=True, blank=True)
     shift = models.CharField(max_length=10, choices=SHIFT_CHOICES, default="morning")
     date = models.DateField()
     # Once confirmed via the Update Attendance screen the record is locked: it can

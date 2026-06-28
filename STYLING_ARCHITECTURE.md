@@ -361,8 +361,11 @@ All models are in `main_app/models.py`. Migrations `0014`–`0017` added the fie
   (migration `0016`).
 - **`Session`**: `start_year`, `end_year` (DateFields). An academic year = **two
   semesters**; a session ≈ a 4-year intake.
-- **`Attendance`**: `session`, `subject`, `shift`, `date`, **`locked`** (bool,
-  migration `0015`). **`AttendanceReport`**: `student`, `attendance`, `status`,
+- **`Attendance`**: `session`, `subject`, **`course`** + **`semester`** (nullable,
+  migration `0018` — needed because a subject shared across courses can also share a
+  session, so course+semester is what actually identifies a class; see §15), `shift`,
+  `date`, **`locked`** (bool, migration `0015`).
+  **`AttendanceReport`**: `student`, `attendance`, `status`,
   `late`. NOTE: `AttendanceReport.student` is `on_delete=DO_NOTHING` (matters when
   deleting students — delete AttendanceReport rows first).
 - **Shift**: `SHIFT_CHOICES = (("morning","Morning Shift"),("day","Day Shift"))`.
@@ -440,21 +443,42 @@ above).
 ## 15. Staff attendance — Take / Update / View (`staff_views.py`, `views.py`)
 
 Shared picker built by `_attendance_picker_context(staff)`. Picker order:
-**Shift → Subject (clickable buttons, filtered by shift) → Course → Semester**.
-The **Semester** dropdown replaced the old Session-Year selector and **auto-sets**
-from the subject's per-course `CourseSubject.semester` (JS `data-assignments`).
+**Shift → Subject (clickable buttons, filtered by shift) → Class**. The single
+**Class** dropdown (`#class_select`) replaced the old separate Course + Semester
+selects. Each subject button carries `data-classes` (JSON list of the concrete
+classes the teacher teaches it in: `{course, course_name, semester, shift, active}`);
+the JS `populateClasses()` fills the Class dropdown from the chosen subject+shift.
+The selected option's value is `"courseId|semester"`, which JS splits into hidden
+`#course`/`#semester` inputs — so the backend params (`subject, course, semester,
+shift`) are unchanged.
 
+- **Why course+semester now live on `Attendance`** (migration `0018`): a Subject is
+  shared across courses at different semesters (via `CourseSubject`), and two such
+  classes can share the **same intake `Session`** (e.g. Computer Network = BE-IT
+  Sem 6 **and** BE Software Sem 5, both session 2022). The old code identified a
+  class only by `session` (+subject+shift), so View/Update returned the **wrong
+  cohort**. `Attendance` now stores **`course`** + **`semester`** (both nullable;
+  back-filled for existing rows in `0018` from each record's reports), and
+  `get_attendance` filters by `subject + shift + course + semester` exactly.
+- **Active classes only** (`active` flag): a class is *active* when a current cohort
+  sits at that `(course, current_semester, shift)`. `populateClasses()` honours a
+  per-page `RESTRICT_ACTIVE` flag — **`true` on Take/Update** (inactive/not-running
+  semesters are hidden, e.g. Microprocessor's BE Software slot when that semester
+  isn't running), **`false` on View** (history of inactive classes stays viewable,
+  labelled "(inactive)").
 - **Take Attendance** (`staff_take_attendance` / `get_students` / `save_attendance`):
   `get_students` filters by course + **`current_semester`** + shift + `passed_out=False`
   (so promoted students don't show for a lower-semester subject). **No status is
   preselected**; JS blocks saving until every student is marked. `save_attendance`
-  **derives `Attendance.session`** from the cohort's `Student.session` (returns
-  `NO_SESSION` if unset) and validates the teacher is assigned for that
-  course/semester/shift.
+  stores `course`+`semester`, **derives `Attendance.session`** from the cohort's
+  `Student.session` (returns `NO_SESSION` if unset), and validates the teacher is
+  assigned for that course/semester/shift (else `NOT_ASSIGNED` — now reliable since
+  the Class dropdown only offers valid assignments).
 - **Update Attendance** (`staff_update_attendance` / `get_attendance` in `views.py` /
   `update_attendance`): saving an update **locks** the record (`Attendance.locked=True`);
   it then can't be edited again (`update_attendance` returns `LOCKED`).
-  `get_attendance` only lists **unlocked** records here.
+  `get_attendance` only lists **unlocked** records here. The `NOT_ASSIGNED` check
+  validates against the record's **own** `course`+`semester`+`shift`.
 - **View Attendance** (`staff_view_attendance`, read-only): sidebar item under
   Update Attendance; same picker; shows status as colored badges. Calls
   `get_attendance` with `include_locked=1` to show **all** dates (locked ones
@@ -481,6 +505,7 @@ from the subject's per-course `CourseSubject.semester` (JS `data-assignments`).
 | `0015_attendance_locked` | `Attendance.locked` |
 | `0016_auto_20260625_2320` | `Student.passed_out`, `Student.passed_out_date` |
 | `0017_course_abbreviation` | `Course.abbreviation` |
+| `0018_auto_20260627_1452` | `Attendance.course`, `Attendance.semester` (+ data backfill) |
 
 ## 18. Current seed data & credentials (as of last session)
 

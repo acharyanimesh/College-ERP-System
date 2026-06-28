@@ -45,45 +45,43 @@ def staff_home(request):
 
 
 def _attendance_picker_context(staff):
-    """Shared options for the take/update attendance pickers: the courses, shifts,
-    subjects (as clickable buttons) this staff teaches and the semesters those
-    subjects sit at. Each subject carries its per-course/shift assignments so the
-    UI can auto-select the semester it is taught at."""
-    # Only courses where this staff is assigned to teach a subject.
-    courses = Course.objects.filter(
-        Q(coursesubject__morning_staff=staff) | Q(coursesubject__day_staff=staff)).distinct()
+    """Shared options for the take/update/view attendance pickers. The flow is
+    Shift -> Subject -> Class. Each subject button carries the list of concrete
+    classes (course + semester + shift) this staff teaches it in, each flagged
+    'active' when a current cohort actually sits at that course/semester/shift.
+    The UI builds a single Class dropdown from this, so a subject taught in two
+    courses at different semesters is never ambiguous, and classes whose semester
+    is not currently running can be hidden (take/update) from selection."""
     # Limit the shift selector to the shift(s) this staff is assigned to.
     shifts = [(v, l) for v, l in SHIFT_CHOICES if v in staff.shifts]
+    # Cohorts currently in progress, as (course_id, semester, shift) triples.
+    active = set(
+        Student.objects.filter(passed_out=False)
+        .values_list('course_id', 'current_semester', 'shift').distinct())
     cs_qs = CourseSubject.objects.filter(
-        Q(morning_staff=staff) | Q(day_staff=staff)).select_related('subject')
+        Q(morning_staff=staff) | Q(day_staff=staff)).select_related('subject', 'course')
     subj_map = {}
-    semesters_set = set()
     for cs in cs_qs:
         entry = subj_map.setdefault(cs.subject_id, {
             'id': cs.subject_id, 'name': cs.subject.name,
-            'morning': False, 'day': False, 'assignments': []})
-        teaches_morning = cs.morning_staff_id == staff.id
-        teaches_day = cs.day_staff_id == staff.id
-        if teaches_morning:
-            entry['morning'] = True
-        if teaches_day:
-            entry['day'] = True
-        cs_shifts = []
-        if teaches_morning:
-            cs_shifts.append('morning')
-        if teaches_day:
-            cs_shifts.append('day')
-        entry['assignments'].append(
-            {'course': cs.course_id, 'semester': cs.semester, 'shifts': cs_shifts})
-        if cs.semester is not None:
-            semesters_set.add(cs.semester)
+            'morning': False, 'day': False, 'classes': []})
+        for shift in ('morning', 'day'):
+            staff_id = cs.morning_staff_id if shift == 'morning' else cs.day_staff_id
+            if staff_id != staff.id:
+                continue
+            entry[shift] = True
+            entry['classes'].append({
+                'course': cs.course_id,
+                'course_name': cs.course.short_name,
+                'semester': cs.semester,
+                'shift': shift,
+                'active': (cs.course_id, cs.semester, shift) in active,
+            })
     subjects = sorted(subj_map.values(), key=lambda s: s['name'].lower())
     for s in subjects:
-        s['assignments_json'] = json.dumps(s['assignments'])
+        s['classes_json'] = json.dumps(s['classes'])
     return {
         'subjects': subjects,
-        'semesters': sorted(semesters_set),
-        'courses': courses,
         'shifts': shifts,
     }
 
@@ -147,7 +145,9 @@ def save_attendance(request):
         session = first_student.session if first_student else None
         if session is None:
             return HttpResponse("NO_SESSION")
-        attendance = Attendance(session=session, subject=subject, shift=shift, date=date)
+        attendance = Attendance(
+            session=session, subject=subject, course_id=course_id,
+            semester=semester, shift=shift, date=date)
         attendance.save()
 
         for student_dict in students:
@@ -203,10 +203,15 @@ def update_attendance(request):
         # Confirmed attendance is permanent and cannot be edited again.
         if attendance.locked:
             return HttpResponse("LOCKED")
-        # Only the assigned teacher for this subject in the attendance's shift
-        # may update it.
+        # Only the assigned teacher for this exact class (subject + course +
+        # semester) in the attendance's shift may update it.
         shift_field = 'morning_staff' if attendance.shift == 'morning' else 'day_staff'
-        if not CourseSubject.objects.filter(subject=attendance.subject, **{shift_field: staff}).exists():
+        assigned = CourseSubject.objects.filter(
+            subject=attendance.subject, **{shift_field: staff})
+        if attendance.course_id is not None:
+            assigned = assigned.filter(
+                course_id=attendance.course_id, semester=attendance.semester)
+        if not assigned.exists():
             return HttpResponse("NOT_ASSIGNED")
 
         for student_dict in students:
