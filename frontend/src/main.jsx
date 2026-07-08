@@ -1,11 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Legacy theme, loaded globally in the same order as base.html:
-// 1. erpnext-style.css (custom theme), 2. FontAwesome icons.
-// Bootstrap 5 is added as an npm dependency in the layout phase.
+// Same load order as base.html: erpnext-style.css, FontAwesome, Bootstrap 5.
 import './assets/css/erpnext-style.css'
 import './assets/fontawesome-free/css/all.min.css'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 
 import App from './App.jsx'
 
