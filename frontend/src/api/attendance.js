@@ -5,6 +5,15 @@ import axiosClient from "./axiosClient";
  * Endpoint methods are added here as the corresponding pages are converted.
  */
 const attendanceAPI = {
+  /**
+   * Class-picker data for the logged-in staff (_attendance_picker_context):
+   * { shifts: [{value,label}], subjects: [{id, name, morning, day,
+   *   classes: [{course, course_name, semester, shift, active}] }] }.
+   */
+  getPicker() {
+    return axiosClient.get("/attendance/picker/");
+  },
+
   /** Students of a class: { subject, course, semester, shift } */
   getStudents(params) {
     return axiosClient.get("/attendance/students/", { params });
@@ -13,6 +22,11 @@ const attendanceAPI = {
   /** Existing attendance dates for a class; pass include_locked for View. */
   getAttendance(params) {
     return axiosClient.get("/attendance/", { params });
+  },
+
+  /** Per-student records of one attendance date (get_student_attendance). */
+  getStudentRecords(attendanceId) {
+    return axiosClient.get(`/attendance/${attendanceId}/students/`);
   },
 
   /** Save a new attendance record. */

@@ -41,6 +41,15 @@ import {
 import LeaveView from "./pages/admin/review/LeaveView";
 import FeedbackView from "./pages/admin/review/FeedbackView";
 import ProfilePage from "./pages/shared/ProfilePage";
+import ApplyLeave from "./pages/shared/ApplyLeave";
+import FeedbackPage from "./pages/shared/FeedbackPage";
+import NotificationsPage from "./pages/shared/NotificationsPage";
+import StaffTakeAttendance from "./pages/staff/StaffTakeAttendance";
+import StaffUpdateAttendance from "./pages/staff/StaffUpdateAttendance";
+import StaffViewAttendance from "./pages/staff/StaffViewAttendance";
+import StaffAddResult from "./pages/staff/StaffAddResult";
+import EditStudentResult from "./pages/staff/EditStudentResult";
+import AddBook from "./pages/staff/AddBook";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -151,6 +160,21 @@ function App() {
             <Route path="/staff/view/feedback/" element={<FeedbackView role="staff" />} />
             <Route path="/student/view/feedback/" element={<FeedbackView role="student" />} />
             <Route path="/admin_view_profile" element={<ProfilePage />} />
+
+            {/* Staff role pages */}
+            <Route path="/staff/attendance/take/" element={<StaffTakeAttendance />} />
+            <Route path="/staff/attendance/update/" element={<StaffUpdateAttendance />} />
+            <Route path="/staff/attendance/view/" element={<StaffViewAttendance />} />
+            <Route path="/staff/apply/leave/" element={<ApplyLeave role="staff" />} />
+            <Route path="/staff/feedback/" element={<FeedbackPage role="staff" />} />
+            <Route path="/staff/result/add/" element={<StaffAddResult />} />
+            <Route path="/staff/result/edit/" element={<EditStudentResult />} />
+            <Route path="/staff/addbook/" element={<AddBook />} />
+            <Route
+              path="/staff/view/notification/"
+              element={<NotificationsPage role="staff" />}
+            />
+            <Route path="/staff/view/profile/" element={<ProfilePage />} />
             <Route path="/student/passed-out/course/:courseId/" element={<PassedOutSessions />} />
             <Route
               path="/student/passed-out/course/:courseId/session/:sessionId/"
