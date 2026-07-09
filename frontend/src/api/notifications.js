@@ -11,7 +11,15 @@ const notificationAPI = {
   getStaffRecipients() {
     return axiosClient.get("/notifications/staff/recipients/");
   },
-  /** Students filtered by course/semester (admin_notify_student drill-down). */
+  /** { course_data, search_students } (admin_notify_student landing). */
+  getStudentBrowse() {
+    return axiosClient.get("/notifications/student/browse/");
+  },
+  /** { course, semester_data } (notify_student_by_course). */
+  getStudentSemesters(courseId) {
+    return axiosClient.get(`/notifications/student/courses/${courseId}/semesters/`);
+  },
+  /** Students of course+semester (notify_student_by_semester). */
   getStudentRecipients(params = {}) {
     return axiosClient.get("/notifications/student/recipients/", { params });
   },

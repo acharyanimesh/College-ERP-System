@@ -27,6 +27,20 @@ import SubjectListByCourse from "./pages/admin/academics/SubjectListByCourse";
 import SubjectFormPage from "./pages/admin/academics/SubjectFormPage";
 import SubjectDetails from "./pages/admin/academics/SubjectDetails";
 import { SessionFormPage, ManageSessions } from "./pages/admin/academics/SessionPages";
+import {
+  AdminViewAttendance,
+  AttendanceStudentList,
+  StudentAttendanceDetail,
+} from "./pages/admin/attendance/AdminAttendancePages";
+import NotifyStaff from "./pages/admin/notify/NotifyStaff";
+import {
+  NotifyStudent,
+  NotifyStudentSemesters,
+  NotifyStudentList,
+} from "./pages/admin/notify/NotifyStudentPages";
+import LeaveView from "./pages/admin/review/LeaveView";
+import FeedbackView from "./pages/admin/review/FeedbackView";
+import ProfilePage from "./pages/shared/ProfilePage";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -114,6 +128,29 @@ function App() {
             <Route path="/add_session/" element={<SessionFormPage />} />
             <Route path="/session/edit/:sessionId" element={<SessionFormPage edit />} />
             <Route path="/session/manage/" element={<ManageSessions />} />
+
+            {/* Attendance / communication / review (admin) */}
+            <Route path="/attendance/view/" element={<AdminViewAttendance />} />
+            <Route path="/attendance/view/course/:courseId/" element={<AttendanceStudentList />} />
+            <Route
+              path="/attendance/view/student/:studentId/"
+              element={<StudentAttendanceDetail />}
+            />
+            <Route path="/admin_notify_staff" element={<NotifyStaff />} />
+            <Route path="/admin_notify_student" element={<NotifyStudent />} />
+            <Route
+              path="/admin_notify_student/course/:courseId/"
+              element={<NotifyStudentSemesters />}
+            />
+            <Route
+              path="/admin_notify_student/course/:courseId/semester/:semester/"
+              element={<NotifyStudentList />}
+            />
+            <Route path="/staff/view/leave/" element={<LeaveView role="staff" />} />
+            <Route path="/student/view/leave/" element={<LeaveView role="student" />} />
+            <Route path="/staff/view/feedback/" element={<FeedbackView role="staff" />} />
+            <Route path="/student/view/feedback/" element={<FeedbackView role="student" />} />
+            <Route path="/admin_view_profile" element={<ProfilePage />} />
             <Route path="/student/passed-out/course/:courseId/" element={<PassedOutSessions />} />
             <Route
               path="/student/passed-out/course/:courseId/session/:sessionId/"

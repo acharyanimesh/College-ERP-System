@@ -24,6 +24,21 @@ const attendanceAPI = {
   update(attendanceId, payload) {
     return axiosClient.put(`/attendance/${attendanceId}/`, payload);
   },
+
+  /* --- Admin "Fetch Attendance" drill-down --- */
+
+  /** Courses with student counts (admin_view_attendance). */
+  adminCourses() {
+    return axiosClient.get("/attendance/admin/courses/");
+  },
+  /** { course, students } of one course (admin_attendance_by_course). */
+  adminStudents(courseId) {
+    return axiosClient.get(`/attendance/admin/courses/${courseId}/students/`);
+  },
+  /** { student, attendance_summary } per subject (admin_student_attendance). */
+  studentSummary(studentId) {
+    return axiosClient.get(`/attendance/admin/students/${studentId}/summary/`);
+  },
 };
 
 export default attendanceAPI;
