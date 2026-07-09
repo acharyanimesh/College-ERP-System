@@ -10,6 +10,23 @@ const dashboardAPI = {
   adminHome() {
     return axiosClient.get("/dashboard/admin/");
   },
+
+  /**
+   * Staff dashboard (staff_views.staff_home). `assigned_subjects` is
+   * serialized as [{ id, name, courses: [{ name, short_name }] }].
+   */
+  staffHome() {
+    return axiosClient.get("/dashboard/staff/");
+  },
+
+  /**
+   * Student dashboard (student_views.student_home). `course_subjects` is
+   * serialized as [{ subject_name, teacher_name|null }] (teacher already
+   * resolved for the student's shift, like cs.staff_for_shift did).
+   */
+  studentHome() {
+    return axiosClient.get("/dashboard/student/");
+  },
 };
 
 export default dashboardAPI;

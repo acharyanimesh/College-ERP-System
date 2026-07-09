@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout, { usePageHeader } from "./layouts/Layout";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import StaffDashboard from "./pages/staff/StaffDashboard";
+import StudentDashboard from "./pages/student/StudentDashboard";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -51,8 +53,8 @@ function App() {
           {/* Everything behind the session, mirroring Django's URL paths */}
           <Route element={<ProtectedLayout />}>
             <Route path="/admin/home/" element={<AdminDashboard />} />
-            <Route path="/staff/home/" element={<PlaceholderPage />} />
-            <Route path="/student/home/" element={<PlaceholderPage />} />
+            <Route path="/staff/home/" element={<StaffDashboard />} />
+            <Route path="/student/home/" element={<StudentDashboard />} />
             <Route path="*" element={<PlaceholderPage />} />
           </Route>
         </Routes>
