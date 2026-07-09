@@ -61,7 +61,15 @@ function StaffFormPage({ edit = false }) {
     staffAPI
       .get(staffId)
       .then((s) => {
-        setFields({ ...EMPTY_STAFF, ...s, profile_pic: null, password: "" });
+        setFields({
+          ...EMPTY_STAFF,
+          ...s,
+          // The API returns courses as objects (Staff Details needs them);
+          // the multi-select works on ids.
+          courses: (s.courses || []).map((c) => c.id ?? c),
+          profile_pic: null,
+          password: "",
+        });
         setInitialEmail(s.email || "");
       })
       .catch(() => addMessage("Could not load the staff member.", "danger"));

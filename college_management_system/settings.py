@@ -43,9 +43,27 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # Third Party Apps
+    'rest_framework',
+
     # My Apps
     'main_app.apps.MainAppConfig'
 ]
+
+# JSON API for the React frontend (main_app/api/, mounted at /api/v1/).
+# Session-cookie auth: the Vite dev server proxies /api and /media to Django,
+# so requests are same-origin and the sessionid/csrftoken cookies just work.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    # Unauthenticated requests must yield 401 (not DRF's default 403) so the
+    # frontend's axios interceptor can trigger a re-login.
+    'EXCEPTION_HANDLER': 'main_app.api.exceptions.api_exception_handler',
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

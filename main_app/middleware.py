@@ -6,6 +6,10 @@ from django.db.utils import OperationalError, ProgrammingError
 
 class LoginCheckMiddleWare(MiddlewareMixin):
     def process_view(self, request, view_func, view_args, view_kwargs):
+        # The JSON API handles its own auth/roles and must return 401/403
+        # instead of redirecting to the login page.
+        if request.path.startswith('/api/'):
+            return None
         modulename = view_func.__module__
         auth_allowed_paths = {
             reverse('login_page'),

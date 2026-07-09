@@ -1,0 +1,147 @@
+"""Hand-rolled dict builders shared by the API views.
+
+The payload field names deliberately match what the converted React pages
+already consume (which in turn mirror the old Django template context), so
+no page needs to change when the backend goes live.
+"""
+
+
+def form_errors(form):
+    """Django form.errors → DRF-style error body ({field: [msgs]},
+    '__all__' mapped to non_field_errors like useFormSubmit expects)."""
+    errors = {}
+    for field, msgs in form.errors.items():
+        key = 'non_field_errors' if field == '__all__' else field
+        errors[key] = list(msgs)
+    return errors
+
+
+def user_dict(user):
+    """Auth payload for /auth/me/ and the login response (Sidebar/Navbar)."""
+    return {
+        'id': user.id,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'full_name': ("%s %s" % (user.first_name, user.last_name)).strip(),
+        'user_type': str(user.user_type),
+        'gender': user.gender,
+        'profile_pic': user.profile_pic.url if user.profile_pic else '',
+    }
+
+
+def course_dict(course):
+    return {
+        'id': course.id,
+        'name': course.name,
+        'abbreviation': course.abbreviation,
+        'short_name': course.short_name,
+        'name_with_abbr': course.name_with_abbr,
+        'semesters': course.semesters,
+    }
+
+
+def session_dict(session):
+    return {
+        'id': session.id,
+        'start_year': session.start_year.isoformat() if session.start_year else None,
+        'end_year': session.end_year.isoformat() if session.end_year else None,
+        'label': str(session),
+    }
+
+
+def student_row(student):
+    """Table row for student lists (Manage Students, notify, attendance)."""
+    user = student.admin
+    return {
+        'id': student.id,
+        'user_id': user.id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'registration_number': student.registration_number,
+        'roll_number': student.roll_number,
+        'course': student.course_id,
+        'course_name': student.course.name if student.course else '',
+        'course_short_name': student.course.short_name if student.course else '',
+        'current_semester': student.current_semester,
+        'shift': student.shift,
+        'shift_display': student.get_shift_display(),
+        'session_label': str(student.session) if student.session else '',
+        'passed_out_date': student.passed_out_date.isoformat() if student.passed_out_date else None,
+    }
+
+
+def student_detail(student):
+    """Student Details page + Edit Student form initial values."""
+    user = student.admin
+    data = student_row(student)
+    data.update({
+        'phone_number': user.phone_number,
+        'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else '',
+        'gender': user.gender,
+        'gender_display': user.get_gender_display(),
+        'address': user.address,
+        'address_line1': user.address_line1,
+        'address_line2': user.address_line2,
+        'city': user.city,
+        'province': user.province,
+        'profile_pic': user.profile_pic.url if user.profile_pic else '',
+        'session': student.session_id,
+    })
+    return data
+
+
+def staff_row(staff):
+    user = staff.admin
+    return {
+        'id': staff.id,
+        'user_id': user.id,
+        'staff_id': staff.staff_id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+    }
+
+
+def staff_detail(staff, assignments=None, subject_count=None):
+    """Staff Details page + Edit Staff form initial values.
+
+    `courses` carries full objects for the details page; the edit form
+    normalizes them back to ids on load.
+    """
+    user = staff.admin
+    data = staff_row(staff)
+    data.update({
+        'phone_number': user.phone_number,
+        'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else '',
+        'gender': user.gender,
+        'gender_display': user.get_gender_display(),
+        'address': user.address,
+        'address_line1': user.address_line1,
+        'address_line2': user.address_line2,
+        'city': user.city,
+        'province': user.province,
+        'profile_pic': user.profile_pic.url if user.profile_pic else '',
+        'courses': [
+            {'id': c.id, 'name': c.name, 'short_name': c.short_name}
+            for c in staff.courses.all()
+        ],
+        'teaches_morning': staff.teaches_morning,
+        'teaches_day': staff.teaches_day,
+        'shifts_display': staff.shifts_display,
+    })
+    if assignments is not None:
+        data['assignments'] = assignments
+    if subject_count is not None:
+        data['subject_count'] = subject_count
+    return data
+
+
+def subject_dict(subject):
+    return {
+        'id': subject.id,
+        'name': subject.name,
+        'code': subject.code,
+        'credit_hours': subject.credit_hours,
+    }
