@@ -34,11 +34,12 @@ const staffAPI = {
     return axiosClient.get(`/staff/${staffId}/subject-assignments/`);
   },
 
-  /** Save per-course-subject shift assignments (assign_staff_subjects POST). */
-  saveSubjectAssignments(staffId, assignments) {
-    return axiosClient.post(`/staff/${staffId}/subject-assignments/`, {
-      assignments,
-    });
+  /**
+   * Save per-shift assignments (assign_staff_subjects POST):
+   * { morning: [courseSubjectIds], day: [courseSubjectIds] }.
+   */
+  saveSubjectAssignments(staffId, selection) {
+    return axiosClient.post(`/staff/${staffId}/subject-assignments/`, selection);
   },
 };
 

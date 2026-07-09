@@ -16,6 +16,10 @@ import {
   PassedOutSessions,
   PassedOutStudentList,
 } from "./pages/admin/students/PassedOutStudents";
+import StaffFormPage from "./pages/admin/staff/StaffFormPage";
+import ManageStaff from "./pages/admin/staff/ManageStaff";
+import StaffDetails from "./pages/admin/staff/StaffDetails";
+import AssignStaffSubjects from "./pages/admin/staff/AssignStaffSubjects";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -80,6 +84,13 @@ function App() {
             />
             <Route path="/student/details/:studentId" element={<StudentDetails />} />
             <Route path="/student/passed-out/" element={<PassedOutCourses />} />
+
+            {/* Staff (admin) */}
+            <Route path="/staff/add" element={<StaffFormPage />} />
+            <Route path="/staff/edit/:staffId" element={<StaffFormPage edit />} />
+            <Route path="/staff/manage/" element={<ManageStaff />} />
+            <Route path="/staff/view/:staffId" element={<StaffDetails />} />
+            <Route path="/staff/assign-subjects/:staffId" element={<AssignStaffSubjects />} />
             <Route path="/student/passed-out/course/:courseId/" element={<PassedOutSessions />} />
             <Route
               path="/student/passed-out/course/:courseId/session/:sessionId/"
