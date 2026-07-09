@@ -266,15 +266,15 @@ or interaction to it.
 | Brand watermark | `/* Brand watermark */` |
 | Login screen | `/* Login Page */` |
 | Mobile / tablet behavior | `/* Responsive Design */`, `/* Mobile responsive... */` |
-| Dark mode | `/* Dark Mode Styles */` and every `/* Dark mode support... */` |
-| Badges | `/* Badge styles for light mode */`, `/* Dark mode badge styles */` |
+| Badges | `/* Badge styles for light mode */` |
 
-> 🌓 **Dark mode:** toggled by `#theme-switch` in the navbar (state saved in
-> `localStorage`, applied via a `dark-mode` class on `<body>`). The **sidebar
-> stays the same solid Deep Teal in both modes** — only the navbar/content
-> area follow the toggle. If you add a new light-mode color rule, check whether
-> it needs a matching `.dark-mode ...` override, or the two modes will look
-> inconsistent.
+> There is **no dark mode** — the app has one fixed brand palette. A
+> `#theme-switch` toggle + `.dark-mode` body-class system existed earlier in
+> the migration and was fully removed (UI control, the `useEffect` that
+> applied it, and ~110 now-unreachable `.dark-mode`/`.theme-toggle` CSS rules)
+> once the design settled on the single Darbha Prana theme. If you ever see
+> a stray `.dark-mode` selector reappear, it's dead — nothing sets that class
+> on `<body>` anymore.
 
 ---
 
@@ -293,7 +293,6 @@ or interaction to it.
 | Change layout shared by all pages | `layouts/Layout.jsx` | Edit navbar / header / content wrapper JSX |
 | Restyle one specific page only | that page's `.jsx` in `pages/<role>/` | Edit its JSX / add scoped `<style>` if truly one-off |
 | Change the login screen | `pages/Login.jsx` + `/* Login Page */` in the CSS | Markup + styles |
-| Tweak dark mode colors | same CSS file → `/* Dark Mode Styles */` | Edit the `.dark-mode ...` rules |
 | Add a new API-backed page | `frontend/src/api/*.js` (call) + `main_app/api/*.py` (endpoint) + a `pages/` component + a route in `App.jsx` | See §6 |
 
 ---
@@ -344,15 +343,23 @@ All of that was removed once the React frontend covered every page:
   overlayScrollbars, sparklines — plus the AdminLTE CSS/JS bundle itself
   (`dist/css/adminlte.*`, `dist/css/alt/*`, `dist/css/style.css`, `dist/js/`,
   `dist/img/`) and a dead alternate template (`registration/base.html`).
+- **Deleted entirely:** jQuery itself (`main_app/static/plugins/jquery/`) —
+  it was still being `<script>`-loaded by `registration/erpnext_base.html`
+  for a "add `.form-control` to inputs" snippet that turned out to be plain
+  vanilla JS (`querySelectorAll`), never actually calling `$`/`jQuery`. Nothing
+  in the surviving password-reset pages uses it.
 - **Removed:** animated Vanta.js (WebGL) role backgrounds — see §4d for why.
-- **Still present, on purpose:** `main_app/static/plugins/jquery/` and
-  `plugins/fontawesome-free/` — the surviving password-reset templates
-  (§4c) still load jQuery (for a small `form-control` class-adder script) and
-  FontAwesome. Don't delete these without also rewriting those two templates.
+- **Removed:** the dark-mode toggle (`#theme-switch` in the navbar) and every
+  `.dark-mode`/`.theme-toggle` CSS rule (~110 rules) once the app settled on
+  one fixed brand palette instead of a light/dark pair.
+- **Still present, on purpose:** `main_app/static/plugins/fontawesome-free/`
+  — the surviving password-reset templates (§4c) still render FontAwesome
+  icons. Don't delete it without also rewriting those templates.
 - **Firebase Cloud Messaging** (push notifications) was never ported to
   React — notifications are stored server-side and shown in-app only
   (`main_app/api/notifications.py`), no service worker, no push permission
-  prompt.
+  prompt. `CustomUser.fcm_token` is a vestigial column nothing reads/writes
+  anymore; left alone since removing it needs a migration.
 
 If you're ever unsure whether something is still live: for a **page**, check
 `frontend/src/App.jsx` for its route; for a **template**, check whether any
