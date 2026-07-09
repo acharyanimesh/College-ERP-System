@@ -22,9 +22,12 @@ const resultAPI = {
   update(data) {
     return axiosClient.put("/results/", data);
   },
-  /** Own results (student_view_result). */
-  getMine() {
-    return axiosClient.get("/results/mine/");
+  /**
+   * Own results by semester (student_view_result):
+   * { semesters, selected, rows: [{ subject_name, result|null }] }.
+   */
+  getMine(params = {}) {
+    return axiosClient.get("/results/mine/", { params });
   },
 };
 

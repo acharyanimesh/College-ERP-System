@@ -50,6 +50,9 @@ import StaffViewAttendance from "./pages/staff/StaffViewAttendance";
 import StaffAddResult from "./pages/staff/StaffAddResult";
 import EditStudentResult from "./pages/staff/EditStudentResult";
 import AddBook from "./pages/staff/AddBook";
+import StudentViewAttendance from "./pages/student/StudentViewAttendance";
+import StudentViewResult from "./pages/student/StudentViewResult";
+import ViewBooks from "./pages/student/ViewBooks";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -175,6 +178,18 @@ function App() {
               element={<NotificationsPage role="staff" />}
             />
             <Route path="/staff/view/profile/" element={<ProfilePage />} />
+
+            {/* Student role pages */}
+            <Route path="/student/view/attendance/" element={<StudentViewAttendance />} />
+            <Route path="/student/apply/leave/" element={<ApplyLeave role="student" />} />
+            <Route path="/student/feedback/" element={<FeedbackPage role="student" />} />
+            <Route path="/student/view/result/" element={<StudentViewResult />} />
+            <Route path="/student/viewbooks/" element={<ViewBooks />} />
+            <Route
+              path="/student/view/notification/"
+              element={<NotificationsPage role="student" />}
+            />
+            <Route path="/student/view/profile/" element={<ProfilePage />} />
             <Route path="/student/passed-out/course/:courseId/" element={<PassedOutSessions />} />
             <Route
               path="/student/passed-out/course/:courseId/session/:sessionId/"

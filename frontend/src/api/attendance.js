@@ -39,6 +39,11 @@ const attendanceAPI = {
     return axiosClient.put(`/attendance/${attendanceId}/`, payload);
   },
 
+  /** Student's own records for a subject + date range (student_view_attendance POST). */
+  getMyRecords(params) {
+    return axiosClient.get("/attendance/mine/", { params });
+  },
+
   /* --- Admin "Fetch Attendance" drill-down --- */
 
   /** Courses with student counts (admin_view_attendance). */
