@@ -25,6 +25,10 @@ export const subjectAPI = {
   getAll(params = {}) {
     return axiosClient.get("/subjects/", { params });
   },
+  /** { course, semester_data: [{number, subject_count}] } (manage_subject_by_course). */
+  manageSemesters(courseId) {
+    return axiosClient.get(`/subjects/manage/courses/${courseId}/semesters/`);
+  },
   get(subjectId) {
     return axiosClient.get(`/subjects/${subjectId}/`);
   },

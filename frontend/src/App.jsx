@@ -20,6 +20,13 @@ import StaffFormPage from "./pages/admin/staff/StaffFormPage";
 import ManageStaff from "./pages/admin/staff/ManageStaff";
 import StaffDetails from "./pages/admin/staff/StaffDetails";
 import AssignStaffSubjects from "./pages/admin/staff/AssignStaffSubjects";
+import CourseFormPage from "./pages/admin/academics/CourseFormPage";
+import ManageCourses from "./pages/admin/academics/ManageCourses";
+import CourseSemesterList from "./pages/admin/academics/CourseSemesterList";
+import SubjectListByCourse from "./pages/admin/academics/SubjectListByCourse";
+import SubjectFormPage from "./pages/admin/academics/SubjectFormPage";
+import SubjectDetails from "./pages/admin/academics/SubjectDetails";
+import { SessionFormPage, ManageSessions } from "./pages/admin/academics/SessionPages";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -91,6 +98,22 @@ function App() {
             <Route path="/staff/manage/" element={<ManageStaff />} />
             <Route path="/staff/view/:staffId" element={<StaffDetails />} />
             <Route path="/staff/assign-subjects/:staffId" element={<AssignStaffSubjects />} />
+
+            {/* Courses / Subjects / Sessions (admin) */}
+            <Route path="/course/add" element={<CourseFormPage />} />
+            <Route path="/course/edit/:courseId" element={<CourseFormPage edit />} />
+            <Route path="/course/manage/" element={<ManageCourses />} />
+            <Route path="/subject/manage/course/:courseId/" element={<CourseSemesterList />} />
+            <Route
+              path="/subject/manage/course/:courseId/semester/:semester/"
+              element={<SubjectListByCourse />}
+            />
+            <Route path="/subject/add/" element={<SubjectFormPage />} />
+            <Route path="/subject/edit/:subjectId" element={<SubjectFormPage edit />} />
+            <Route path="/subject/view/:subjectId" element={<SubjectDetails />} />
+            <Route path="/add_session/" element={<SessionFormPage />} />
+            <Route path="/session/edit/:sessionId" element={<SessionFormPage edit />} />
+            <Route path="/session/manage/" element={<ManageSessions />} />
             <Route path="/student/passed-out/course/:courseId/" element={<PassedOutSessions />} />
             <Route
               path="/student/passed-out/course/:courseId/session/:sessionId/"
