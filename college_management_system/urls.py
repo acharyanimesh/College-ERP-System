@@ -22,5 +22,9 @@ urlpatterns = [
     path("", include('main_app.urls')),
     path("api/v1/", include('main_app.api.urls')),
     path("accounts/", include("django.contrib.auth.urls")),
-    path('admin/', admin.site.urls),
+    # Moved off /admin/ — the React app's admin ROLE pages live there
+    # (e.g. /admin/home/, mirroring the old Django URLs), colliding with
+    # Django's built-in admin SITE. Django's own admin (superuser-only,
+    # unrelated to the app's user_type=1 "admin" role) now lives here instead.
+    path('django-admin/', admin.site.urls),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

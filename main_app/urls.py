@@ -12,7 +12,9 @@ from . import views
 
 urlpatterns = [
     re_path(r'^$', views.react_app, name='login_page'),
-    # Everything except api/admin/accounts/static/media belongs to React Router.
-    re_path(r'^(?!api/|admin/|accounts/|static/|media/).*$', views.react_app,
-            name='react_app'),
+    # Everything except api/django-admin/accounts/static/media belongs to
+    # React Router — including /admin/*, which is the app's own admin ROLE
+    # pages, not Django's admin site (that's at /django-admin/).
+    re_path(r'^(?!api/|django-admin/|accounts/|static/|media/).*$',
+            views.react_app, name='react_app'),
 ]
