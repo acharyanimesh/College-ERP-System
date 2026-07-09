@@ -23,6 +23,11 @@ const authAPI = {
   me() {
     return axiosClient.get("/auth/me/");
   },
+
+  /** Live email-availability check (check_email_availability). */
+  checkEmail(email) {
+    return axiosClient.post("/auth/check-email/", { email });
+  },
 };
 
 export default authAPI;
