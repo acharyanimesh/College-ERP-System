@@ -76,9 +76,6 @@ MIDDLEWARE = [
 
     # Third Part Middleware
     'whitenoise.middleware.WhiteNoiseMiddleware',
-
-    # My Middleware
-    'main_app.middleware.LoginCheckMiddleWare',
 ]
 
 ROOT_URLCONF = 'college_management_system.urls'
@@ -163,6 +160,11 @@ STATIC_URL = '/static/'
 
 MEDIA_URL = '/media/'
 
+# The built React app (vite build, base '/static/') is collected into
+# STATIC_ROOT alongside main_app's assets; its index.html is served by
+# main_app.views.react_app.
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'frontend', 'dist')]
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 AUTH_USER_MODEL = 'main_app.CustomUser'
@@ -186,7 +188,10 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = True
 # DEFAULT_FROM_EMAIL = "School Management System <admin@admin.com>"
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Non-manifest storage: Vite already content-hashes the React bundle, and the
+# legacy AdminLTE plugin CSS has broken url() refs the manifest storage
+# rejects at collectstatic time.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 prod_db = dj_database_url.config(conn_max_age=500)
 DATABASES['default'].update(prod_db)

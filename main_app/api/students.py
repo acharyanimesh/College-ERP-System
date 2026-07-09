@@ -8,11 +8,33 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from django.db.models import F
+
 from ..forms import StudentForm
-from ..hod_views import _cascade_promote_course
 from ..models import SHIFT_CHOICES, Course, CustomUser, Session, Student
 from .permissions import IsAdmin
 from .serializers import course_dict, form_errors, student_detail, student_row
+
+
+def _cascade_promote_course(course, from_semester):
+    """Promote every active student of `course` whose semester >= from_semester up
+    by one; final-semester students are marked passed out (kept on record).
+    Returns (promoted_count, graduated_count). Caller wraps this in a transaction."""
+    final = course.semesters
+    if not final:
+        return (0, 0)
+    grads = Student.objects.filter(
+        course=course, current_semester=final, passed_out=False)
+    graduated = grads.count()
+    if graduated:
+        grads.update(passed_out=True, passed_out_date=date_cls.today())
+    # Updating off the OLD value (highest-to-lowest is irrelevant for a single
+    # bulk +1) keeps each batch separate, so a lower one never mixes into the next.
+    promoted = Student.objects.filter(
+        course=course, passed_out=False,
+        current_semester__gte=from_semester, current_semester__lt=final
+    ).update(current_semester=F('current_semester') + 1)
+    return (promoted, graduated)
 
 
 def _save_profile_pic(files):

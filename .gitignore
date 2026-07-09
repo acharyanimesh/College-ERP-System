@@ -35,3 +35,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Collected static files (collectstatic output)
+/static/
+
