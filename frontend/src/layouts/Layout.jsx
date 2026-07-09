@@ -9,7 +9,6 @@ import {
 import { Link, Outlet } from "react-router-dom";
 import Navbar, { homePath } from "./Navbar";
 import Sidebar from "./Sidebar";
-import VantaBackground from "./VantaBackground";
 
 /* ------------------------------------------------------------------ */
 /* Page header + flash messages, replacing the Django template blocks  */
@@ -115,9 +114,6 @@ function Layout({ user, onLogout }) {
 
   return (
     <LayoutContext.Provider value={{ setHeader, addMessage }}>
-      {/* Vanta animated background (admin: waves, staff: globe, student: birds) */}
-      <VantaBackground userType={user?.user_type} />
-
       {/* Navigation Bar */}
       <Navbar
         user={user}

@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import * as THREE from "three";
-import DOTS from "vanta/dist/vanta.dots.min";
 import { useAuth } from "../context/AuthContext";
 import { homePath } from "../layouts/Navbar";
 
@@ -80,32 +78,8 @@ function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const containerRef = useRef(null);
   const recaptchaRef = useRef(null);
   const recaptcha = useRecaptcha(recaptchaRef);
-
-  /* --- Vanta DOTS background on .login-container (login.html script) --- */
-  useEffect(() => {
-    if (!containerRef.current) return undefined;
-    const effect = DOTS({
-      el: containerRef.current,
-      THREE,
-      mouseControls: true,
-      touchControls: true,
-      gyroControls: false,
-      minHeight: 200.0,
-      minWidth: 200.0,
-      scale: 1.0,
-      scaleMobile: 1.0,
-      color: 0xff8820,
-      color2: 0xff8820,
-      backgroundColor: 0x202428,
-      size: 3.0,
-      spacing: 35.0,
-      showLines: true,
-    });
-    return () => effect?.destroy();
-  }, []);
 
   const handleRememberChange = (e) => {
     setRemember(e.target.checked);
@@ -154,7 +128,7 @@ function Login() {
   if (user) return <Navigate to={homePath(user.user_type)} replace />;
 
   return (
-    <div className="login-container" ref={containerRef}>
+    <div className="login-container">
       <div className="login-card" style={{ animation: "fadeIn 0.6s ease" }}>
         <div className="login-logo">
           <h1 className="login-title">College ERP</h1>
