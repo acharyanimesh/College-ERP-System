@@ -5,9 +5,13 @@ import axiosClient from "./axiosClient";
  * Backend endpoints live under main_app/api/ and are mounted at /api/v1/.
  */
 const authAPI = {
-  /** Log in with email + password. Returns the user profile on success. */
-  login(email, password) {
-    return axiosClient.post("/auth/login/", { email, password });
+  /**
+   * Log in and return the user profile.
+   * credentials: { email, password, remember, captcha } — `captcha` is the
+   * g-recaptcha-response token, verified server-side like doLogin does.
+   */
+  login(credentials) {
+    return axiosClient.post("/auth/login/", credentials);
   },
 
   /** Destroy the current session. */

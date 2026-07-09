@@ -1,43 +1,62 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout, { usePageHeader } from "./layouts/Layout";
+import Login from "./pages/Login";
 
-/**
- * Temporary layout preview while pages are converted (Phase 5 replaces this
- * with the real routes + auth). Change PREVIEW_USER.user_type to '1' / '2' /
- * '3' to preview the admin, staff, or student chrome.
- */
-const PREVIEW_USER = {
-  user_type: "1",
-  full_name: "Layout Preview",
-  email: "preview@example.com",
-  profile_pic: "",
-};
-
+/** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
   usePageHeader({ title: "Dashboard" });
   return (
     <div className="card">
       <div className="card-body">
-        <h5 className="card-title">Layout preview</h5>
+        <h5 className="card-title">Page not converted yet</h5>
         <p className="text-muted mb-0">
-          Navbar, sidebar, dark mode and the Vanta background are live. Pages
-          are converted here one-by-one during the migration.
+          This screen is still served by the Django templates; it will be
+          migrated here page-by-page.
         </p>
       </div>
     </div>
   );
 }
 
+/**
+ * Auth gate around the app chrome, replacing Django's @login_required:
+ * waits for the session check, then either shows the layout or bounces to
+ * the login screen.
+ */
+function ProtectedLayout() {
+  const { user, loading, logout } = useAuth();
+  const navigate = useNavigate();
+
+  if (loading) return null;
+  if (!user) return <Navigate to="/" replace />;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
+  };
+
+  return <Layout user={user} onLogout={handleLogout} />;
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout user={PREVIEW_USER} />}>
-          <Route path="*" element={<PlaceholderPage />} />
-        </Route>
-        <Route path="/" element={<Navigate to="/admin/home/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Login (redirects home when already authenticated) */}
+          <Route path="/" element={<Login />} />
+
+          {/* Everything behind the session, mirroring Django's URL paths */}
+          <Route element={<ProtectedLayout />}>
+            <Route path="/admin/home/" element={<PlaceholderPage />} />
+            <Route path="/staff/home/" element={<PlaceholderPage />} />
+            <Route path="/student/home/" element={<PlaceholderPage />} />
+            <Route path="*" element={<PlaceholderPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
