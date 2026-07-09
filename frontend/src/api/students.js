@@ -42,7 +42,34 @@ const studentAPI = {
     });
   },
 
-  /** Passed-out students, optionally filtered: { course, session } */
+  /* --- Manage Students drill-down (course → semester → shift) --- */
+
+  /** Courses with active-student counts (manage_student). */
+  manageCourses() {
+    return axiosClient.get("/students/manage/courses/");
+  },
+  /** { course, total_semesters, semester_data } (manage_student_by_course). */
+  manageSemesters(courseId) {
+    return axiosClient.get(`/students/manage/courses/${courseId}/semesters/`);
+  },
+  /** { course, shift_data, is_final_semester } (…_by_course_semester). */
+  manageShifts(courseId, semester) {
+    return axiosClient.get(
+      `/students/manage/courses/${courseId}/semesters/${semester}/shifts/`
+    );
+  },
+
+  /* --- Passed-out records drill-down (course → session) --- */
+
+  /** Courses with passed-out counts (passed_out_students). */
+  passedOutCourses() {
+    return axiosClient.get("/students/passed-out/courses/");
+  },
+  /** { course, session_data, no_session_count } (passed_out_by_course). */
+  passedOutSessions(courseId) {
+    return axiosClient.get(`/students/passed-out/courses/${courseId}/sessions/`);
+  },
+  /** Passed-out students of a course+session (passed_out_by_session). */
   getPassedOut(params = {}) {
     return axiosClient.get("/students/passed-out/", { params });
   },
