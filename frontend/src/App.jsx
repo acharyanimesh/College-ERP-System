@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-route
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout, { usePageHeader } from "./layouts/Layout";
 import Login from "./pages/Login";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -49,7 +50,7 @@ function App() {
 
           {/* Everything behind the session, mirroring Django's URL paths */}
           <Route element={<ProtectedLayout />}>
-            <Route path="/admin/home/" element={<PlaceholderPage />} />
+            <Route path="/admin/home/" element={<AdminDashboard />} />
             <Route path="/staff/home/" element={<PlaceholderPage />} />
             <Route path="/student/home/" element={<PlaceholderPage />} />
             <Route path="*" element={<PlaceholderPage />} />
