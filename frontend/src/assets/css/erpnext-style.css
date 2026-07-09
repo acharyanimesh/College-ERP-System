@@ -1,18 +1,27 @@
-/* ERPNext Style CSS for College ERP */
+/* ERPNext Style CSS for College ERP — Darbha Prana brand palette */
 
 :root {
-  --primary-color: #5e64ff;
+  /* Deep Teal / Verdant / Antique Gold / Ivory, from the Darbha Prana
+     Tech Global brand mark. */
+  --primary-color: #0e4e4c;
+  --primary-mid: #166460;
+  --primary-dark: #093735;
+  --accent-color: #c0a054;
+  --accent-light: #d8be7e;
+  --accent-dark: #a3813a;
   --secondary-color: #8d99ae;
   --success-color: #28a745;
   --danger-color: #dc3545;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
-  --light-color: #f8f9fc;
-  --dark-color: #262626;
-  --border-color: #d1d8dd;
-  --text-muted: #8d99ae;
+  --warning-color: #c0a054;
+  --info-color: #166460;
+  --light-color: #f5f2e8;
+  --dark-color: #23302e;
+  --border-color: #e1dac8;
+  --text-muted: #74807c;
   --sidebar-width: 240px;
   --navbar-height: 60px;
+  --font-display: "Cinzel", Georgia, serif;
+  --font-support: "Jost", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 /* Reset and base styles */
@@ -43,12 +52,17 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(14, 78, 76, 0.08);
 }
 
 .navbar-brand {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--primary-color) !important;
   text-decoration: none;
 }
@@ -56,6 +70,12 @@ body {
 .navbar-brand:hover {
   color: var(--primary-color) !important;
   text-decoration: none;
+}
+
+.navbar-brand-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
 
 .navbar-toggle {
@@ -99,7 +119,7 @@ body {
   color: #fff;
   text-decoration: none;
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(94, 100, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(14, 78, 76, 0.3);
 }
 
 .logout-btn i {
@@ -126,18 +146,20 @@ body {
   }
 }
 
-/* Sidebar */
+/* Sidebar — a constant deep-teal brand panel; unlike the content area it
+   does not follow the light/dark toggle, so the brand identity stays put. */
 .erpnext-sidebar {
   position: fixed;
   top: var(--navbar-height);
   left: 0;
   width: var(--sidebar-width);
   height: calc(100vh - var(--navbar-height));
-  background: #fff;
-  border-right: 1px solid var(--border-color);
+  background: var(--primary-color);
+  border-right: none;
   overflow-y: auto;
   z-index: 1020;
   transition: transform 0.3s ease;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-collapsed .erpnext-sidebar {
@@ -146,7 +168,7 @@ body {
 
 .sidebar-header {
   padding: 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .sidebar-user {
@@ -160,80 +182,34 @@ body {
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid var(--accent-color);
 }
 
 .sidebar-default-avatar {
   width: 40px;
   height: 40px;
   font-size: 40px;
-  color: #6c757d;
+  color: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background-color: #f8f9fa;
-  border: 2px solid #e9ecef;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .sidebar-user-info h6 {
   margin: 0;
   font-weight: 600;
   font-size: 14px;
-  color: var(--dark-color);
+  font-family: var(--font-display);
+  color: #fff;
 }
 
 .sidebar-user-info small {
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.65);
   font-size: 12px;
-}
-
-/* Dark mode support for sidebar user info */
-.dark-mode .sidebar-user-info h6 {
-  color: #f7fafc;
-}
-
-.dark-mode .sidebar-user-info small {
-  color: #a0aec0;
-}
-
-/* Dark mode support for entire sidebar */
-.dark-mode .erpnext-sidebar {
-  background: #2d3748;
-  border-right-color: #4a5568;
-}
-
-.dark-mode .sidebar-header {
-  border-bottom-color: #4a5568;
-}
-
-.dark-mode .nav-section-title {
-  color: #a0aec0;
-}
-
-.dark-mode .nav-link {
-  color: #e2e8f0;
-}
-
-.dark-mode .nav-link:hover {
-  background-color: #374151;
-  color: #66b3ff;
-}
-
-.dark-mode .nav-link.active {
-  background-color: #1a365d;
-  color: #66b3ff;
-  border-left-color: #66b3ff;
-}
-
-.dark-mode .nav-submenu {
-  background-color: #374151;
-}
-
-/* Dark mode support for default avatar */
-.dark-mode .sidebar-default-avatar {
-  color: #a0aec0;
-  background-color: #4a5568;
-  border-color: #718096;
+  font-family: var(--font-support);
 }
 
 /* AdminLTE default avatar styling */
@@ -262,12 +238,17 @@ body {
   padding: 20px 0;
 }
 
-.nav-section-title {
+/* Scoped under .erpnext-sidebar: .nav-link's color rule would otherwise tie
+   in specificity with Bootstrap's own same-named .nav-link class and lose
+   the cascade purely on load order (bootstrap.min.css imports last). */
+.erpnext-sidebar .nav-section-title {
   padding: 0 20px 8px;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  font-family: var(--font-support);
+  color: rgba(255, 255, 255, 0.5);
   margin: 0;
 }
 
@@ -275,26 +256,26 @@ body {
   margin: 2px 0;
 }
 
-.nav-link {
+.erpnext-sidebar .nav-link {
   display: flex;
   align-items: center;
   padding: 12px 20px;
-  color: var(--dark-color);
+  color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
 }
 
-.nav-link:hover {
-  background-color: #f5f6fa;
-  color: var(--primary-color);
+.erpnext-sidebar .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
   text-decoration: none;
 }
 
-.nav-link.active {
-  background-color: #e8f2ff;
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+.erpnext-sidebar .nav-link.active {
+  background-color: rgba(192, 160, 84, 0.18);
+  color: var(--accent-light);
+  border-left-color: var(--accent-color);
   font-weight: 500;
 }
 
@@ -321,7 +302,7 @@ body {
 
 /* Submenu */
 .nav-submenu {
-  background-color: #f8f9fc;
+  background-color: rgba(0, 0, 0, 0.16);
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s ease;
@@ -338,6 +319,8 @@ body {
 
 /* Main Content */
 .erpnext-main {
+  position: relative;
+  z-index: 1;
   margin-left: var(--sidebar-width);
   margin-top: var(--navbar-height);
   padding: 20px;
@@ -359,12 +342,15 @@ body {
 .page-title {
   font-size: 24px;
   font-weight: 600;
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
   margin: 0;
-  color: var(--dark-color);
+  color: var(--primary-color);
 }
 
 .page-subtitle {
   color: var(--text-muted);
+  font-family: var(--font-support);
   font-size: 14px;
   margin: 5px 0 0;
 }
@@ -374,6 +360,7 @@ body {
   padding: 0;
   margin: 10px 0 0;
   font-size: 13px;
+  font-family: var(--font-support);
 }
 
 .breadcrumb-item a {
@@ -404,7 +391,7 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, var(--primary-color), var(--info-color));
+  background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
   border-radius: 12px 12px 0 0;
   z-index: 1;
 }
@@ -426,15 +413,16 @@ body {
 .card-title {
   font-size: 18px;
   font-weight: 600;
+  font-family: var(--font-display);
   margin: 0;
-  color: var(--dark-color);
+  color: var(--primary-color);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .card-title i {
-  color: var(--primary-color);
+  color: var(--accent-dark);
   font-size: 20px;
 }
 
@@ -492,6 +480,7 @@ body {
 .stat-label {
   color: var(--text-muted);
   font-size: 14px;
+  font-family: var(--font-support);
   margin: 0;
 }
 
@@ -527,7 +516,7 @@ body {
 }
 
 .stat-icon.primary {
-  background-color: rgba(94, 100, 255, 0.1);
+  background-color: rgba(14, 78, 76, 0.1);
   color: var(--primary-color);
 }
 
@@ -537,8 +526,8 @@ body {
 }
 
 .stat-icon.warning {
-  background-color: rgba(255, 193, 7, 0.1);
-  color: var(--warning-color);
+  background-color: rgba(192, 160, 84, 0.16);
+  color: var(--accent-dark);
 }
 
 .stat-icon.danger {
@@ -589,8 +578,8 @@ body {
 }
 
 .dark-mode .stat-icon.primary {
-  background-color: rgba(94, 100, 255, 0.2);
-  color: #8a92ff;
+  background-color: rgba(31, 122, 116, 0.25);
+  color: #5fc9c1;
 }
 
 .dark-mode .stat-icon.success {
@@ -599,8 +588,8 @@ body {
 }
 
 .dark-mode .stat-icon.warning {
-  background-color: rgba(255, 193, 7, 0.2);
-  color: #ffd93d;
+  background-color: rgba(216, 190, 126, 0.22);
+  color: var(--accent-light);
 }
 
 .dark-mode .stat-icon.danger {
@@ -676,30 +665,30 @@ body {
 
 .btn:focus {
   outline: 0;
-  box-shadow: 0 0 0 2px rgba(94, 100, 255, 0.25);
+  box-shadow: 0 0 0 2px rgba(14, 78, 76, 0.25);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #4c52ff 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-mid) 100%);
   border-color: var(--primary-color);
   color: #fff;
   font-weight: 500;
-  box-shadow: 0 1px 3px rgba(94, 100, 255, 0.3);
+  box-shadow: 0 1px 3px rgba(14, 78, 76, 0.35);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #4c52ff 0%, #3d42cc 100%);
-  border-color: #4c52ff;
+  background: linear-gradient(135deg, var(--primary-mid) 0%, var(--primary-dark) 100%);
+  border-color: var(--primary-mid);
   color: #fff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(94, 100, 255, 0.4);
+  box-shadow: 0 4px 8px rgba(14, 78, 76, 0.4);
 }
 
 .btn-primary:active {
-  background: #3d42cc;
-  border-color: #3d42cc;
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
   transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(94, 100, 255, 0.2);
+  box-shadow: 0 1px 2px rgba(14, 78, 76, 0.3);
 }
 
 .btn-sm {
@@ -725,18 +714,18 @@ body {
 }
 
 .btn-warning {
-  background: linear-gradient(135deg, var(--warning-color) 0%, #e0a800 100%);
+  background: linear-gradient(135deg, var(--warning-color) 0%, var(--accent-dark) 100%);
   border-color: var(--warning-color);
-  color: #212529;
-  box-shadow: 0 1px 3px rgba(255, 193, 7, 0.3);
+  color: #2b2312;
+  box-shadow: 0 1px 3px rgba(192, 160, 84, 0.35);
 }
 
 .btn-warning:hover {
-  background: linear-gradient(135deg, #e0a800 0%, #d39e00 100%);
-  border-color: #e0a800;
-  color: #212529;
+  background: linear-gradient(135deg, var(--accent-dark) 0%, #8a6d2e 100%);
+  border-color: var(--accent-dark);
+  color: #2b2312;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.4);
+  box-shadow: 0 4px 8px rgba(192, 160, 84, 0.45);
 }
 
 .btn-danger {
@@ -769,18 +758,21 @@ body {
   box-shadow: 0 4px 8px rgba(108, 117, 125, 0.4);
 }
 
+/* !important: Bootstrap ships its own same-named .btn-outline-primary with
+   hardcoded color/border-color at equal specificity, which would otherwise
+   win the cascade simply because bootstrap.min.css imports last. */
 .btn-outline-primary {
   background: transparent;
-  border: 1px solid var(--primary-color);
-  color: var(--primary-color);
+  border: 1px solid var(--primary-color) !important;
+  color: var(--primary-color) !important;
 }
 
 .btn-outline-primary:hover {
   background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: #fff;
+  border-color: var(--primary-color) !important;
+  color: #fff !important;
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(94, 100, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(14, 78, 76, 0.3);
 }
 
 /* Utility spacing classes */
@@ -822,7 +814,7 @@ body {
 .form-control:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(94, 100, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(14, 78, 76, 0.12);
 }
 
 /* Tables */
@@ -852,7 +844,7 @@ body {
 }
 
 .table tbody tr:hover {
-  background-color: rgba(94, 100, 255, 0.05);
+  background-color: rgba(14, 78, 76, 0.05);
   transition: background-color 0.2s ease;
 }
 
@@ -901,11 +893,39 @@ body {
   color: #721c24;
 }
 
-/* Login Page */
+/* Brand watermark — the Darbha Prana mark, faint and fixed in a back
+   corner of the content area (admin/staff/student alike) and centered
+   behind the login card. Purely decorative. */
+.brand-watermark {
+  position: fixed;
+  right: -60px;
+  bottom: -60px;
+  width: 420px;
+  height: auto;
+  max-width: 45vw;
+  opacity: 0.05;
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dark-mode .brand-watermark {
+  opacity: 0.09;
+}
+
+@media (max-width: 768px) {
+  .brand-watermark {
+    width: 260px;
+  }
+}
+
+/* Login Page — deep-teal brand gradient behind an ivory glass card. */
 .login-container {
   position: relative;
   min-height: 100vh;
-  background-color: #202428;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(192, 160, 84, 0.16) 0%, transparent 45%),
+    linear-gradient(160deg, #124f4c 0%, #0b3634 55%, #072423 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -913,23 +933,28 @@ body {
   overflow: hidden;
 }
 
-/* Vanta injects a full-size canvas as the background layer */
-.login-container > .vanta-canvas {
+.login-container .brand-watermark {
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 640px;
+  opacity: 0.05;
+  filter: brightness(4);
   z-index: 0;
 }
 
 .login-card {
   position: relative;
   z-index: 1;
-  background: rgba(32, 36, 40, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 136, 32, 0.35);
-  border-radius: 12px;
+  background: rgba(245, 242, 232, 0.97);
+  border: 1px solid rgba(192, 160, 84, 0.4);
+  border-radius: 14px;
   padding: 40px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .login-logo {
@@ -938,311 +963,80 @@ body {
 }
 
 .login-logo img {
-  width: 80px;
-  height: 80px;
-  margin-bottom: 15px;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 12px;
 }
 
 .login-title {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 600;
-  color: #ff8820;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  color: var(--primary-color);
   margin: 0;
 }
 
 .login-subtitle {
-  color: #b9bdc2;
+  color: var(--text-muted);
+  font-family: var(--font-support);
   font-size: 14px;
   margin: 5px 0 0;
 }
 
-/* Dark-theme form controls, scoped to the login card */
 .login-card .form-label {
-  color: #e6e8ea;
+  color: var(--dark-color);
 }
 
 .login-card .form-label i {
-  color: #ff8820;
+  color: var(--accent-dark);
 }
 
 .login-card .form-control {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #f1f3f5;
+  background-color: #fff;
+  border: 1px solid var(--border-color);
+  color: var(--dark-color);
 }
 
 .login-card .form-control::placeholder {
-  color: #8d99ae;
+  color: var(--text-muted);
 }
 
 .login-card .form-control:focus {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: #ff8820;
-  box-shadow: 0 0 0 0.2rem rgba(255, 136, 32, 0.25);
-  color: #fff;
+  background-color: #fff;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(14, 78, 76, 0.15);
+  color: var(--dark-color);
 }
 
 .login-card .form-check-label {
-  color: #c7cbd0;
+  color: var(--text-muted);
 }
 
 .login-card .btn-primary {
-  background: #202428;
-  border: 1px solid #ff8820;
-  color: #ff8820;
+  background: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  color: #fff;
 }
 
 .login-card .btn-primary:hover,
 .login-card .btn-primary:focus,
 .login-card .btn-primary:active {
-  background: #ff8820;
-  border-color: #ff8820;
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
   color: #fff;
 }
 
 .login-card a {
-  color: #ff8820;
+  color: var(--accent-dark);
 }
 
 .login-card a:hover {
-  color: #ffa64d;
+  color: var(--primary-color);
 }
 
 .login-card .login-footer .text-muted {
-  color: #8d99ae !important;
-}
-
-/* Vanta WAVES background (admin pages) */
-.vanta-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-/* Make the admin/staff body transparent so the fixed canvas is visible
-   (Safari hides z-index:-1 backgrounds behind an opaque body) */
-.glass-theme,
-.staff-bg {
-  background: transparent !important;
-}
-
-/* Lift the content above the background canvas; navbar(1030)/sidebar(1020) already sit on top.
-   .erpnext-main has no background, so the animation shows through behind the cards. */
-.glass-theme .erpnext-main,
-.staff-bg .erpnext-main {
-  position: relative;
-  z-index: 1;
-}
-
-/* Keep the page header readable over the dark animated waves */
-.glass-theme .page-title {
-  color: #ffffff;
-}
-
-.glass-theme .page-subtitle,
-.glass-theme .breadcrumb-item,
-.glass-theme .breadcrumb-item a,
-.glass-theme .breadcrumb-item.active {
-  color: #e6eef5;
-}
-
-/* ============================================================
-   Admin dark-glass theme — navbar, sidebar and content panels
-   blend into the waves background (minimal glassmorphism).
-   ============================================================ */
-.glass-theme {
-  --glass-bg: rgba(7, 27, 43, 0.66);
-  --glass-bg-strong: rgba(7, 27, 43, 0.82);
-  --glass-border: rgba(130, 200, 230, 0.16);
-  --glass-text: #e8f1f7;
-  --glass-muted: #9bb4c4;
-  --glass-accent: #5ad1f4;
-}
-
-/* Navbar */
-.glass-theme .erpnext-navbar {
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: none;
-}
-.glass-theme .navbar-brand {
-  color: var(--glass-text) !important;
-}
-.glass-theme .logout-btn {
-  border-color: var(--glass-accent);
-  color: var(--glass-accent);
-}
-.glass-theme .logout-btn:hover {
-  background: var(--glass-accent);
-  color: #05202e;
-}
-
-/* Sidebar */
-.glass-theme .erpnext-sidebar {
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid var(--glass-border);
-}
-.glass-theme .sidebar-header {
-  border-bottom: 1px solid var(--glass-border);
-}
-.glass-theme .sidebar-user-info h6 {
-  color: var(--glass-text);
-}
-.glass-theme .sidebar-user-info small,
-.glass-theme .sidebar-default-avatar {
-  color: var(--glass-muted);
-}
-.glass-theme .nav-section-title {
-  color: var(--glass-muted);
-}
-.glass-theme .nav-link {
-  color: #cddde8;
-}
-.glass-theme .nav-link:hover {
-  color: var(--glass-accent);
-  background: rgba(90, 209, 244, 0.08);
-}
-.glass-theme .nav-link.active {
-  color: var(--glass-accent);
-  background: rgba(90, 209, 244, 0.12);
-  border-left-color: var(--glass-accent);
-}
-.glass-theme .nav-submenu {
-  background: rgba(0, 0, 0, 0.18);
-}
-
-/* Content cards (the "foreground") */
-.glass-theme .card,
-.glass-theme .erpnext-card,
-.glass-theme .stat-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  color: var(--glass-text);
-}
-.glass-theme .card-header {
-  background: transparent;
-  border-bottom: 1px solid var(--glass-border);
-}
-.glass-theme .card-footer {
-  background: transparent;
-  border-top: 1px solid var(--glass-border);
-  color: var(--glass-text);
-}
-.glass-theme .card-title,
-.glass-theme .card-body {
-  color: var(--glass-text);
-}
-.glass-theme .card-title i {
-  color: var(--glass-accent);
-}
-
-/* Frosted-glass surface for the content area only (header/title stays plain) */
-.glass-theme .erpnext-card .card-body,
-.glass-theme .card .card-body {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  margin: 0 14px 14px;
-}
-.glass-theme .stat-label {
-  color: var(--glass-muted);
-}
-
-/* AdminLTE small-box stat tiles (staff dashboard) -> glass, overriding bg-* colors */
-.glass-theme .small-box {
-  background: var(--glass-bg) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  color: var(--glass-text);
-}
-.glass-theme .small-box .inner h3,
-.glass-theme .small-box .inner p {
-  color: var(--glass-text);
-}
-.glass-theme .small-box .icon {
-  color: rgba(255, 255, 255, 0.14);
-}
-
-/* Tables */
-.glass-theme .table {
-  color: var(--glass-text);
-}
-.glass-theme .table th,
-.glass-theme .table td,
-.glass-theme .table-bordered,
-.glass-theme .table-bordered th,
-.glass-theme .table-bordered td {
-  border-color: var(--glass-border);
-  color: var(--glass-text);
-}
-.glass-theme .table thead th,
-.glass-theme .thead-dark th {
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--glass-text);
-  border-color: var(--glass-border);
-}
-.glass-theme .table tbody tr:hover td,
-.glass-theme .table tbody tr:hover th,
-.glass-theme .table-hover > tbody > tr:hover > * {
-  --bs-table-hover-color: #ffffff;
-  --bs-table-accent-bg: rgba(90, 209, 244, 0.12);
-  background: rgba(90, 209, 244, 0.12);
-  color: #ffffff !important;
-}
-.glass-theme .table tbody tr:hover td,
-.glass-theme .table tbody tr:hover td *,
-.glass-theme .table tbody tr:hover th,
-.glass-theme .table tbody tr:hover th * {
-  color: #ffffff !important;
-}
-
-/* Forms (add / edit pages) */
-.glass-theme .form-control,
-.glass-theme .form-select {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
-  color: var(--glass-text);
-}
-.glass-theme .form-control::placeholder {
-  color: var(--glass-muted);
-}
-.glass-theme .form-control:focus,
-.glass-theme .form-select:focus {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: var(--glass-accent);
-  box-shadow: 0 0 0 0.2rem rgba(90, 209, 244, 0.2);
-  color: #ffffff;
-}
-.glass-theme .form-label,
-.glass-theme label {
-  color: var(--glass-text);
-}
-
-/* Soft, low-contrast buttons (View All + Quick Actions) — minimal, easy on the eyes */
-.glass-theme .btn-primary {
-  background: rgba(90, 209, 244, 0.12);
-  border: 1px solid rgba(90, 209, 244, 0.32);
-  color: #cdeefb;
-  box-shadow: none;
-}
-.glass-theme .btn-primary:hover,
-.glass-theme .btn-primary:focus,
-.glass-theme .btn-primary:active {
-  background: rgba(90, 209, 244, 0.22);
-  border-color: rgba(90, 209, 244, 0.5);
-  color: #ffffff;
-  box-shadow: none;
+  color: var(--text-muted) !important;
 }
 
 /* reCAPTCHA Responsive Styles */
@@ -1319,22 +1113,23 @@ body {
   }
 }
 
-/* Dark Mode Styles */
+/* Dark Mode Styles — a dark-teal variant of the brand palette. The sidebar
+   stays the same solid Deep Teal in both modes (see .erpnext-sidebar). */
 .dark-mode {
-  --bg-color: #1a1a1a;
-  --navbar-bg: #2d2d2d;
-  --sidebar-bg: #2d2d2d;
-  --card-bg: #2d2d2d;
-  --text-color: #e0e0e0;
-  --text-muted: #a0a0a0;
-  --dark-color: #e0e0e0;
-  --border-color: #404040;
-  --primary-color: #5e64ff;
+  --bg-color: #10201f;
+  --navbar-bg: #132e2c;
+  --sidebar-bg: #0e4e4c;
+  --card-bg: #16302d;
+  --text-color: #ece7da;
+  --text-muted: #9fb0ac;
+  --dark-color: #ece7da;
+  --border-color: #274240;
+  --primary-color: #1f7a74;
   --success-color: #28a745;
-  --warning-color: #ffc107;
+  --warning-color: #d8be7e;
   --danger-color: #dc3545;
-  --info-color: #17a2b8;
-  --light-color: #404040;
+  --info-color: #4a9490;
+  --light-color: #16302d;
   --secondary-color: #6c757d;
 }
 
@@ -1346,43 +1141,6 @@ body {
 .dark-mode .erpnext-navbar {
   background-color: var(--navbar-bg);
   border-bottom: 1px solid var(--border-color);
-}
-
-.dark-mode .erpnext-sidebar {
-  background-color: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
-}
-
-.dark-mode .nav-link {
-  color: var(--text-color);
-}
-
-.dark-mode .nav-link:hover {
-  color: var(--primary-color);
-  background-color: rgba(94, 100, 255, 0.1);
-}
-
-.dark-mode .nav-link.active {
-  color: var(--primary-color);
-  background-color: rgba(94, 100, 255, 0.15);
-}
-
-.dark-mode .nav-submenu {
-  background-color: var(--border-color);
-}
-
-.dark-mode .nav-submenu .nav-link {
-  color: var(--text-color);
-  background-color: transparent;
-}
-
-.dark-mode .nav-submenu .nav-link:hover {
-  background-color: rgba(94, 100, 255, 0.1);
-  color: var(--primary-color);
-}
-
-.dark-mode .nav-item {
-  background-color: transparent;
 }
 
 .dark-mode .card {
@@ -1433,7 +1191,7 @@ body {
 }
 
 .dark-mode .table tbody tr:hover {
-  background-color: rgba(94, 100, 255, 0.1) !important;
+  background-color: rgba(14, 78, 76, 0.1) !important;
   color: var(--text-color) !important;
 }
 
@@ -1443,7 +1201,7 @@ body {
 }
 
 .dark-mode .table tr:hover {
-  background-color: rgba(94, 100, 255, 0.1) !important;
+  background-color: rgba(14, 78, 76, 0.1) !important;
 }
 
 .dark-mode .table tr:hover td {
@@ -1549,14 +1307,14 @@ body {
 }
 
 .dark-mode .btn-primary {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #4c52ff 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-mid) 100%);
   border-color: var(--primary-color);
-  box-shadow: 0 1px 3px rgba(94, 100, 255, 0.4);
+  box-shadow: 0 1px 3px rgba(31, 122, 116, 0.4);
 }
 
 .dark-mode .btn-primary:hover {
-  background: linear-gradient(135deg, #4c52ff 0%, #3d42cc 100%);
-  box-shadow: 0 4px 8px rgba(94, 100, 255, 0.5);
+  background: linear-gradient(135deg, var(--primary-mid) 0%, var(--primary-color) 100%);
+  box-shadow: 0 4px 8px rgba(31, 122, 116, 0.5);
 }
 
 .dark-mode .btn-success {
@@ -1569,12 +1327,12 @@ body {
 }
 
 .dark-mode .btn-warning {
-  background: linear-gradient(135deg, var(--warning-color) 0%, #e0a800 100%);
-  box-shadow: 0 1px 3px rgba(255, 193, 7, 0.4);
+  background: linear-gradient(135deg, var(--warning-color) 0%, var(--accent-dark) 100%);
+  box-shadow: 0 1px 3px rgba(192, 160, 84, 0.4);
 }
 
 .dark-mode .btn-warning:hover {
-  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.5);
+  box-shadow: 0 4px 8px rgba(192, 160, 84, 0.5);
 }
 
 .dark-mode .btn-danger {
@@ -1599,13 +1357,9 @@ body {
 .dark-mode .form-group .form-label,
 .dark-mode .control-label,
 .dark-mode p,
-.dark-mode span,
+.dark-mode span:not(.nav-text),
 .dark-mode .text-muted {
   color: var(--text-color) !important;
-}
-
-.dark-mode .nav-section-title {
-  color: var(--text-muted);
 }
 
 .dark-mode .user-name {
@@ -1622,7 +1376,7 @@ body {
 .dark-mode .logout-btn:hover {
   background: var(--primary-color);
   color: #fff;
-  box-shadow: 0 2px 4px rgba(94, 100, 255, 0.4);
+  box-shadow: 0 2px 4px rgba(14, 78, 76, 0.4);
 }
 
 .dark-mode .login-card {
@@ -1720,7 +1474,7 @@ body {
 
 /* Hover effects for the capsule slider */
 .theme-toggle:hover .slider {
-  box-shadow: 0 0 10px rgba(94, 100, 255, 0.3);
+  box-shadow: 0 0 10px rgba(14, 78, 76, 0.3);
 }
 
 .theme-toggle:hover .slider:before {

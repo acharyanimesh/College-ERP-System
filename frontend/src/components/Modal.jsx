@@ -1,7 +1,6 @@
 /**
  * Controlled Bootstrap modal (replaces the data-bs-toggle modals + the
- * $('#myModal').appendTo('body') trick in the templates — React renders it
- * outside the glass-theme stacking context already).
+ * $('#myModal').appendTo('body') trick in the templates).
  */
 function Modal({ show, onClose, header, footer, children }) {
   if (!show) return null;

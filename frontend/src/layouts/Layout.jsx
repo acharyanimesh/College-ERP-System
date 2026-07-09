@@ -9,6 +9,7 @@ import {
 import { Link, Outlet } from "react-router-dom";
 import Navbar, { homePath } from "./Navbar";
 import Sidebar from "./Sidebar";
+import Watermark from "./Watermark";
 
 /* ------------------------------------------------------------------ */
 /* Page header + flash messages, replacing the Django template blocks  */
@@ -38,12 +39,6 @@ export function useMessages() {
 
 /* ------------------------------------------------------------------ */
 
-const ROLE_BODY_CLASSES = {
-  1: ["admin-bg", "glass-theme"],
-  2: ["staff-bg", "glass-theme"],
-  3: ["student-bg", "glass-theme"],
-};
-
 const MOBILE_BREAKPOINT = 768;
 
 /**
@@ -59,13 +54,6 @@ function Layout({ user, onLogout }) {
   const [header, setHeader] = useState({ title: "Dashboard", subtitle: "", breadcrumb: [] });
   const [messages, setMessages] = useState([]);
   const nextMessageId = useRef(1);
-
-  /* --- Role background classes on <body> (base.html body class attr) --- */
-  useEffect(() => {
-    const classes = ROLE_BODY_CLASSES[String(user?.user_type)] || [];
-    document.body.classList.add(...classes);
-    return () => document.body.classList.remove(...classes);
-  }, [user]);
 
   /* --- Dark mode: body class + localStorage, like the legacy toggle --- */
   useEffect(() => {
@@ -114,6 +102,8 @@ function Layout({ user, onLogout }) {
 
   return (
     <LayoutContext.Provider value={{ setHeader, addMessage }}>
+      <Watermark />
+
       {/* Navigation Bar */}
       <Navbar
         user={user}

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import brandIcon from "../assets/image/brand-icon.png";
 
 /** Home route per user_type — mirrors the url-name switches in base.html. */
 export function homePath(userType) {
@@ -19,6 +20,7 @@ function Navbar({ user, theme, onToggleTheme, onToggleSidebar, onLogout }) {
           <i className="fas fa-bars"></i>
         </button>
         <Link to={homePath(user?.user_type)} className="navbar-brand">
+          <img src={brandIcon} alt="" className="navbar-brand-icon" />
           College ERP
         </Link>
       </div>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { homePath } from "../layouts/Navbar";
+import Watermark from "../layouts/Watermark";
+import brandIcon from "../assets/image/brand-icon.png";
 
 const RECAPTCHA_SITE_KEY = "6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF";
 
@@ -116,7 +118,7 @@ function Login() {
   };
   const btnHoverOn = (e) => {
     e.currentTarget.style.transform = "translateY(-2px)";
-    e.currentTarget.style.boxShadow = "0 4px 12px rgba(255, 136, 32, 0.45)";
+    e.currentTarget.style.boxShadow = "0 4px 12px rgba(14, 78, 76, 0.4)";
   };
   const btnHoverOff = (e) => {
     e.currentTarget.style.transform = "translateY(0)";
@@ -129,8 +131,10 @@ function Login() {
 
   return (
     <div className="login-container">
+      <Watermark />
       <div className="login-card" style={{ animation: "fadeIn 0.6s ease" }}>
         <div className="login-logo">
+          <img src={brandIcon} alt="" width={64} height={64} />
           <h1 className="login-title">College ERP</h1>
           <p className="login-subtitle">Education Management System</p>
         </div>

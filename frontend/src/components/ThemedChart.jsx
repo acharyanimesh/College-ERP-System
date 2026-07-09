@@ -6,19 +6,13 @@ const CHART_FONT_FAMILY =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", ' +
   '"Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif';
 
-/**
- * Text/grid colors for the current background, exactly like the dashboard
- * templates' `isAdminBg` check: on the glass/waves backgrounds the chart
- * text and grid lines must be light to stay readable.
- */
+/** Text/grid colors following the light/dark toggle, so charts stay readable
+ * against the (light or dark) card background either way. */
 export function chartTheme() {
-  const onGlassBg =
-    document.body.classList.contains("admin-bg") ||
-    document.body.classList.contains("staff-bg") ||
-    document.body.classList.contains("student-bg");
+  const dark = document.body.classList.contains("dark-mode");
   return {
-    textColor: onGlassBg ? "#e8f1f7" : "#262626",
-    gridColor: onGlassBg ? "rgba(255, 255, 255, 0.12)" : "#f1f3f4",
+    textColor: dark ? "#ece7da" : "#23302e",
+    gridColor: dark ? "rgba(236, 231, 218, 0.14)" : "#f1f3f4",
   };
 }
 
