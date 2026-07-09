@@ -10,9 +10,9 @@ export function homePath(userType) {
 
 /**
  * Top navigation bar (base.html <nav class="erpnext-navbar">):
- * sidebar toggle, brand link, dark-mode capsule slider, logout button.
+ * sidebar toggle, brand link, and logout button.
  */
-function Navbar({ user, theme, onToggleTheme, onToggleSidebar, onLogout }) {
+function Navbar({ user, onToggleSidebar, onLogout }) {
   return (
     <nav className="erpnext-navbar">
       <div className="navbar-left">
@@ -21,26 +21,11 @@ function Navbar({ user, theme, onToggleTheme, onToggleSidebar, onLogout }) {
         </button>
         <Link to={homePath(user?.user_type)} className="navbar-brand">
           <img src={brandIcon} alt="" className="navbar-brand-icon" />
-          College ERP
+          <span className="navbar-brand-text">College ERP</span>
         </Link>
       </div>
 
       <div className="navbar-user">
-        {/* Dark Mode Toggle */}
-        <label className="theme-toggle" htmlFor="theme-switch">
-          <input
-            type="checkbox"
-            id="theme-switch"
-            checked={theme === "dark"}
-            onChange={onToggleTheme}
-          />
-          <span className="slider">
-            <i className="fas fa-sun icon-light"></i>
-            <i className="fas fa-moon icon-dark"></i>
-          </span>
-        </label>
-
-        {/* Logout Button */}
         <Link
           to="/logout"
           className="btn btn-outline-primary btn-sm logout-btn"

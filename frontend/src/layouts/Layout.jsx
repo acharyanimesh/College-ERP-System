@@ -47,7 +47,6 @@ const MOBILE_BREAKPOINT = 768;
  * Pages render via <Outlet /> and set their header with usePageHeader().
  */
 function Layout({ user, onLogout }) {
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
   const [sidebarOpen, setSidebarOpen] = useState(
     () => localStorage.getItem("sidebarOpen") === "true"
   );
@@ -55,13 +54,11 @@ function Layout({ user, onLogout }) {
   const [messages, setMessages] = useState([]);
   const nextMessageId = useRef(1);
 
-  /* --- Dark mode: body class + localStorage, like the legacy toggle --- */
+  /* --- Theme is now a single fixed brand palette. Clear old dark-mode state. --- */
   useEffect(() => {
-    document.body.classList.toggle("dark-mode", theme === "dark");
-    localStorage.setItem("theme", theme);
-    // Charts and other listeners can restyle themselves on this event.
-    window.dispatchEvent(new CustomEvent("themechange", { detail: { theme } }));
-  }, [theme]);
+    document.body.classList.remove("dark-mode");
+    localStorage.removeItem("theme");
+  }, []);
 
   /* --- Sidebar open/collapsed body classes (mobile vs desktop rules) --- */
   useEffect(() => {
@@ -107,8 +104,6 @@ function Layout({ user, onLogout }) {
       {/* Navigation Bar */}
       <Navbar
         user={user}
-        theme={theme}
-        onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
         onLogout={onLogout}
       />
