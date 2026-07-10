@@ -4,6 +4,7 @@ from django.core.validators import RegexValidator
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import AbstractUser
 from datetime import datetime,timedelta
 
@@ -51,6 +52,7 @@ class CustomUser(AbstractUser):
     username = None  # Removed username, using email instead
     email = models.EmailField(unique=True)
     user_type = models.CharField(default=1, choices=USER_TYPE, max_length=1)
+    middle_name = models.CharField(max_length=150, blank=True, default="")
     gender = models.CharField(max_length=1, choices=GENDER)
     profile_pic = models.ImageField()
     address = models.TextField(blank=True, default="")
@@ -128,6 +130,9 @@ class Student(models.Model):
     # kept on record per course + session under "Passed Out Students".
     passed_out = models.BooleanField(default=False)
     passed_out_date = models.DateField(null=True, blank=True)
+    parent_full_name = models.CharField(max_length=150, blank=True, default="")
+    parent_phone_number = models.CharField(max_length=20, blank=True, default="")
+    parent_relationship = models.CharField(max_length=50, blank=True, default="")
 
     def __str__(self):
         return self.admin.last_name + ", " + self.admin.first_name
@@ -152,7 +157,6 @@ class Staff(models.Model):
     staff_id = models.CharField(
         max_length=6, null=True, blank=True, unique=True,
         validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])
-    courses = models.ManyToManyField(Course, related_name='staff_members')
     # A teacher can be assigned to the Morning shift, the Day shift, or both.
     teaches_morning = models.BooleanField(default=True)
     teaches_day = models.BooleanField(default=False)
@@ -160,6 +164,16 @@ class Staff(models.Model):
 
     def __str__(self):
         return self.admin.first_name + " " +  self.admin.last_name
+
+    @property
+    def taught_courses(self):
+        """Courses this staff actually teaches in, derived from their
+        Assign Subjects picks (CourseSubject.morning_staff/day_staff) rather
+        than a manually-maintained list — picking up a subject in a course
+        is what puts that course here."""
+        return Course.objects.filter(
+            Q(coursesubject__morning_staff=self) | Q(coursesubject__day_staff=self)
+        ).distinct()
 
     @property
     def shifts(self):

@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -7,6 +8,13 @@ from rest_framework.response import Response
 from ..models import CourseSubject, Staff, Student, StudentResult, Subject
 from .attendance import picker_context
 from .permissions import IsStaff, IsStudent
+
+
+def _teaches(staff, subject):
+    """Whether `staff` is assigned to teach `subject` in any class/shift —
+    results can only be entered for subjects a teacher actually teaches."""
+    return CourseSubject.objects.filter(subject=subject).filter(
+        Q(morning_staff=staff) | Q(day_staff=staff)).exists()
 
 
 @api_view(['GET'])
@@ -22,8 +30,11 @@ def classes(request):
 def class_students(request):
     """Students for the result dropdowns. The pages pass subject + session
     (like the old staff_add_result template's ajax did)."""
+    staff = get_object_or_404(Staff, admin=request.user)
     params = request.query_params
     subject = get_object_or_404(Subject, id=params.get('subject'))
+    if not _teaches(staff, subject):
+        return Response({'code': 'NOT_ASSIGNED'}, status=status.HTTP_400_BAD_REQUEST)
     students = Student.objects.filter(
         course__in=subject.courses.all(), passed_out=False)
     if params.get('session'):
@@ -41,9 +52,12 @@ def class_students(request):
 @permission_classes([IsStaff])
 def fetch(request):
     """Existing scores of one student for a subject (fetch_student_result)."""
+    staff = get_object_or_404(Staff, admin=request.user)
     params = request.query_params
     student = get_object_or_404(Student, id=params.get('student'))
     subject = get_object_or_404(Subject, id=params.get('subject'))
+    if not _teaches(staff, subject):
+        return Response({'code': 'NOT_ASSIGNED'}, status=status.HTTP_400_BAD_REQUEST)
     result = get_object_or_404(StudentResult, student=student, subject=subject)
     return Response({'test': result.test, 'exam': result.exam})
 
@@ -53,9 +67,12 @@ def fetch(request):
 def save(request):
     """POST upserts like staff_add_result; PUT updates like EditResultView
     (404 when no existing result)."""
+    staff = get_object_or_404(Staff, admin=request.user)
     data = request.data
     student = get_object_or_404(Student, id=data.get('student'))
     subject = get_object_or_404(Subject, id=data.get('subject'))
+    if not _teaches(staff, subject):
+        return Response({'code': 'NOT_ASSIGNED'}, status=status.HTTP_400_BAD_REQUEST)
     test = data.get('test')
     exam = data.get('exam')
     if request.method == 'PUT':

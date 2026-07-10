@@ -151,10 +151,8 @@ function StaffTakeAttendance() {
                 className="list-group-item d-flex justify-content-between align-items-center flex-wrap"
               >
                 <span className="student-name">
+                  {s.roll_number && <span className="student-roll">{s.roll_number}</span>}
                   {s.name}
-                  {s.roll_number && (
-                    <small className="text-muted"> (Roll: {s.roll_number})</small>
-                  )}
                 </span>
                 <StatusButtons
                   value={statuses[s.id]}

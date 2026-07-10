@@ -41,7 +41,6 @@ def _apply_staff_fields(staff, form):
     staff.staff_id = get('staff_id')
     staff.teaches_morning = get('teaches_morning')
     staff.teaches_day = get('teaches_day')
-    staff.courses.set(get('courses'))
 
 
 @api_view(['GET', 'POST'])

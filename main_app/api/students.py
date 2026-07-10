@@ -50,6 +50,7 @@ def _apply_user_fields(user, form):
     """Copy the shared CustomUser fields out of a valid StudentForm."""
     get = form.cleaned_data.get
     user.first_name = get('first_name')
+    user.middle_name = get('middle_name')
     user.last_name = get('last_name')
     user.gender = get('gender')
     user.address_line1 = get('address_line1')
@@ -134,6 +135,9 @@ def student_list(request):
             student.course = course
             student.shift = get('shift')
             student.current_semester = new_sem
+            student.parent_full_name = get('parent_full_name')
+            student.parent_phone_number = get('parent_phone_number')
+            student.parent_relationship = get('parent_relationship')
             student.save()
     except Exception as e:
         return Response({'detail': "Could Not Add: " + str(e)},
@@ -176,6 +180,9 @@ def student_item(request, student_id):
         student.course = get('course')
         student.shift = get('shift')
         student.current_semester = get('current_semester') or 1
+        student.parent_full_name = get('parent_full_name')
+        student.parent_phone_number = get('parent_phone_number')
+        student.parent_relationship = get('parent_relationship')
         user.save()
         student.save()
     except Exception as e:

@@ -459,10 +459,14 @@ body {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
-.stat-card:nth-child(1)::before { background: var(--primary-color); }
-.stat-card:nth-child(2)::before { background: var(--success-color); }
-.stat-card:nth-child(3)::before { background: var(--warning-color); }
-.stat-card:nth-child(4)::before { background: var(--danger-color); }
+/* Accent bar color keys off data-tone (not position), so any number of
+   stat cards can be added without the color cycling breaking. */
+.stat-card[data-tone="primary"]::before { background: var(--primary-color); }
+.stat-card[data-tone="success"]::before { background: var(--success-color); }
+.stat-card[data-tone="warning"]::before { background: var(--warning-color); }
+.stat-card[data-tone="danger"]::before { background: var(--danger-color); }
+.stat-card[data-tone="info"]::before { background: var(--primary-dark, var(--primary-color)); }
+.stat-card[data-tone="accent"]::before { background: var(--accent-light); }
 
 .stat-number {
   font-size: 32px;
@@ -506,6 +510,16 @@ body {
 .stat-icon.danger {
   background-color: rgba(220, 53, 69, 0.1);
   color: var(--danger-color);
+}
+
+.stat-icon.info {
+  background-color: rgba(9, 55, 53, 0.12);
+  color: var(--primary-dark, var(--primary-color));
+}
+
+.stat-icon.accent {
+  background-color: rgba(216, 190, 126, 0.24);
+  color: var(--accent-dark);
 }
 
 /* Legacy color classes for backward compatibility */
@@ -1490,10 +1504,12 @@ body {
   background: var(--accent-color);
 }
 
-.stat-card:nth-child(1)::before { background: var(--primary-color); }
-.stat-card:nth-child(2)::before { background: var(--accent-color); }
-.stat-card:nth-child(3)::before { background: var(--primary-mid); }
-.stat-card:nth-child(4)::before { background: var(--accent-light); }
+.stat-card[data-tone="primary"]::before { background: var(--primary-color); }
+.stat-card[data-tone="success"]::before { background: var(--accent-color); }
+.stat-card[data-tone="warning"]::before { background: var(--primary-mid); }
+.stat-card[data-tone="danger"]::before { background: var(--accent-light); }
+.stat-card[data-tone="info"]::before { background: var(--primary-dark); }
+.stat-card[data-tone="accent"]::before { background: var(--accent-dark); }
 
 .stat-number {
   color: var(--primary-color);
@@ -1530,6 +1546,16 @@ body {
 .stat-icon.bg-red {
   background: rgba(216, 190, 126, 0.24);
   color: #8f6f2f;
+}
+
+.stat-icon.info {
+  background: rgba(9, 55, 53, 0.14);
+  color: var(--primary-dark);
+}
+
+.stat-icon.accent {
+  background: rgba(163, 129, 58, 0.16);
+  color: var(--accent-dark);
 }
 
 .btn {
@@ -1750,5 +1776,356 @@ textarea.form-control:focus {
 
   .page-title {
     font-size: 1.35rem !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Admin Dashboard — operational workspace (Attention grid, Activity
+   feed, Health/Trend matrices, Academic progress, Calendar).
+------------------------------------------------------------------- */
+
+.dashboard-section-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+/* Attention grid — exceptions only, nothing shown when everything's fine */
+.attention-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.attention-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-warm, #fbfaf5);
+  text-decoration: none;
+  color: var(--text-main, var(--dark-color));
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+a.attention-item:hover {
+  transform: translateX(2px);
+  box-shadow: 0 6px 16px rgba(14, 78, 76, 0.12);
+  text-decoration: none;
+  color: var(--text-main, var(--dark-color));
+}
+
+.attention-item-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  margin-top: 1px;
+}
+
+.attention-item--danger .attention-item-icon {
+  background: rgba(155, 95, 69, 0.18);
+  color: var(--danger-color);
+}
+
+.attention-item--warning .attention-item-icon {
+  background: rgba(192, 160, 84, 0.22);
+  color: var(--accent-dark);
+}
+
+.attention-item--info .attention-item-icon {
+  background: rgba(14, 78, 76, 0.12);
+  color: var(--primary-color);
+}
+
+.attention-item-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding-top: 4px;
+}
+
+.attention-empty,
+.activity-empty {
+  padding: 34px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
+.attention-empty i,
+.activity-empty i {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 10px;
+  color: var(--accent-light);
+}
+
+/* Recent activity feed */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(14, 78, 76, 0.1);
+  color: var(--primary-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.activity-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-text {
+  font-size: 13px;
+  color: var(--text-main, var(--dark-color));
+  line-height: 1.4;
+}
+
+.activity-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+/* Health metrics — percentages with a horizontal bar instead of a donut */
+.health-metric {
+  margin-bottom: 16px;
+}
+
+.health-metric:last-child {
+  margin-bottom: 0;
+}
+
+.health-metric-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-main, var(--dark-color));
+  margin-bottom: 6px;
+}
+
+.health-metric-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-ivory, #f5f2e8);
+  overflow: hidden;
+  display: flex;
+}
+
+.health-metric-fill {
+  height: 100%;
+}
+
+.health-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--border-color);
+  font-size: 13px;
+}
+
+.health-stat-row:last-child {
+  border-bottom: none;
+}
+
+.health-stat-label {
+  color: var(--text-muted);
+}
+
+.health-stat-value {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+/* Small horizontal trend rows — intake / weekly attendance */
+.trend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.trend-row:last-child {
+  margin-bottom: 0;
+}
+
+.trend-row-label {
+  width: 78px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trend-row-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-ivory, #f5f2e8);
+  overflow: hidden;
+}
+
+.trend-row-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 999px;
+}
+
+.trend-row-value {
+  width: 34px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+/* Academic progress — Cascade Promotion Monitor */
+.promo-course {
+  margin-bottom: 20px;
+}
+
+.promo-course:last-child {
+  margin-bottom: 0;
+}
+
+.promo-course-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--primary-color);
+  font-size: 14.5px;
+  margin-bottom: 10px;
+}
+
+.promo-semesters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.promo-chip {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--surface-warm, #fbfaf5);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-main, var(--dark-color));
+}
+
+.promo-empty {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.promo-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(192, 160, 84, 0.16);
+  border: 1px solid rgba(192, 160, 84, 0.38);
+  color: var(--accent-dark);
+  font-size: 12.5px;
+  font-weight: 650;
+  flex-wrap: wrap;
+}
+
+/* Institutional calendar */
+.calendar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.calendar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-warm, #fbfaf5);
+  border: 1px solid var(--border-color);
+}
+
+.calendar-date-badge {
+  flex-shrink: 0;
+  min-width: 44px;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--primary-color);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.calendar-item-label {
+  font-size: 13px;
+  color: var(--text-main, var(--dark-color));
+}
+
+.quick-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .activity-feed {
+    max-height: 320px;
+  }
+
+  .trend-row-label {
+    width: 60px;
   }
 }

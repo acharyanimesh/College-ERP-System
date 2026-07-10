@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { sessionAPI, subjectAPI } from "../../api/academics";
+import { sessionAPI } from "../../api/academics";
 import resultAPI from "../../api/results";
 import { ListCard } from "../../components/ListCard";
 import { usePageHeader, useMessages } from "../../layouts/Layout";
@@ -23,7 +23,9 @@ function StaffAddResult() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    subjectAPI.getAll().then(setSubjects).catch(() => {});
+    // Only subjects this staff member actually teaches (mirrors the
+    // attendance picker's assignment scoping).
+    resultAPI.getClasses().then((data) => setSubjects(data.subjects || [])).catch(() => {});
     sessionAPI.getAll().then(setSessions).catch(() => {});
   }, []);
 

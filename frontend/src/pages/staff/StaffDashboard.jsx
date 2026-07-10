@@ -136,40 +136,48 @@ function StaffDashboard() {
           <div className="stat-icon primary">
             <i className="fas fa-user-graduate"></i>
           </div>
-          <div className="stat-number" style={{ color: "var(--primary-color)" }}>
-            {stats?.total_students ?? 0}
+          <div className="stat-card-body">
+            <div className="stat-number" style={{ color: "var(--primary-color)" }}>
+              {stats?.total_students ?? 0}
+            </div>
+            <p className="stat-label">Total Students</p>
           </div>
-          <p className="stat-label">Total Students</p>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon success">
             <i className="fas fa-calendar-check"></i>
           </div>
-          <div className="stat-number" style={{ color: "var(--success-color)" }}>
-            {stats?.total_attendance ?? 0}
+          <div className="stat-card-body">
+            <div className="stat-number" style={{ color: "var(--success-color)" }}>
+              {stats?.total_attendance ?? 0}
+            </div>
+            <p className="stat-label">Total Attendance Taken</p>
           </div>
-          <p className="stat-label">Total Attendance Taken</p>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon warning">
             <i className="fas fa-calendar-times"></i>
           </div>
-          <div className="stat-number" style={{ color: "var(--warning-color)" }}>
-            {stats?.total_leave ?? 0}
+          <div className="stat-card-body">
+            <div className="stat-number" style={{ color: "var(--warning-color)" }}>
+              {stats?.total_leave ?? 0}
+            </div>
+            <p className="stat-label">Total Leave Applied</p>
           </div>
-          <p className="stat-label">Total Leave Applied</p>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon danger">
             <i className="fas fa-book"></i>
           </div>
-          <div className="stat-number" style={{ color: "var(--danger-color)" }}>
-            {stats?.total_subject ?? 0}
+          <div className="stat-card-body">
+            <div className="stat-number" style={{ color: "var(--danger-color)" }}>
+              {stats?.total_subject ?? 0}
+            </div>
+            <p className="stat-label">Total Subjects</p>
           </div>
-          <p className="stat-label">Total Subjects</p>
         </div>
       </div>
 

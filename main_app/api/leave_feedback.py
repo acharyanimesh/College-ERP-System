@@ -33,7 +33,7 @@ def _person_name(obj, role):
 
 def _course_names(obj, role):
     if role == 'staff':
-        return ", ".join(c.short_name for c in obj.staff.courses.all())
+        return ", ".join(c.short_name for c in obj.staff.taught_courses)
     student = obj.student
     return student.course.short_name if student.course else ''
 

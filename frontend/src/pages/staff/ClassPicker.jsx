@@ -23,18 +23,31 @@ export const PICKER_STYLES = `
     margin-left: 0.35rem;
     filter: invert(0.85);
   }
+  .student-attendance-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: none;
+  }
   .student-attendance-list .list-group-item {
     padding: 0.85rem 1rem;
-    background: var(--glass-bg, rgba(7, 27, 43, 0.66));
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--glass-border, rgba(130, 200, 230, 0.16));
-    color: var(--glass-text, #e8f1f7);
+    background: var(--surface-ivory, #f5f2e8);
+    border: 1px solid var(--border-color, #e5dcc4);
+    border-radius: 8px;
+    color: var(--text-main, #23302e);
   }
   .student-attendance-list .student-name {
     font-weight: 600;
     font-size: 1.05rem;
-    color: var(--glass-text, #e8f1f7);
+    color: var(--text-main, #23302e);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .student-attendance-list .student-roll {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text-main, #23302e);
   }
   .student-attendance-list .attendance-status .status-btn { min-width: 90px; }
   .student-attendance-list .status-badge {

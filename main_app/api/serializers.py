@@ -77,6 +77,7 @@ def student_detail(student):
     user = student.admin
     data = student_row(student)
     data.update({
+        'middle_name': user.middle_name,
         'phone_number': user.phone_number,
         'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else '',
         'gender': user.gender,
@@ -88,6 +89,9 @@ def student_detail(student):
         'province': user.province,
         'profile_pic': user.profile_pic.url if user.profile_pic else '',
         'session': student.session_id,
+        'parent_full_name': student.parent_full_name,
+        'parent_phone_number': student.parent_phone_number,
+        'parent_relationship': student.parent_relationship,
     })
     return data
 
@@ -125,7 +129,7 @@ def staff_detail(staff, assignments=None, subject_count=None):
         'profile_pic': user.profile_pic.url if user.profile_pic else '',
         'courses': [
             {'id': c.id, 'name': c.name, 'short_name': c.short_name}
-            for c in staff.courses.all()
+            for c in staff.taught_courses
         ],
         'teaches_morning': staff.teaches_morning,
         'teaches_day': staff.teaches_day,

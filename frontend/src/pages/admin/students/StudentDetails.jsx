@@ -18,7 +18,11 @@ function StudentDetails() {
   const { studentId } = useParams();
   const { data: student } = useApi(() => studentAPI.get(studentId), [studentId]);
 
-  const fullName = student ? `${student.first_name} ${student.last_name}` : "";
+  const fullName = student
+    ? [student.first_name, student.middle_name, student.last_name]
+        .filter(Boolean)
+        .join(" ")
+    : "";
   usePageHeader({
     title: student ? `Student Details - ${fullName}` : "Student Details",
     breadcrumb: [{ text: "Student Details" }],
@@ -67,6 +71,13 @@ function StudentDetails() {
         <DetailRow label="Shift">
           <span className="badge badge-secondary">{student.shift_display}</span>
         </DetailRow>
+      </dl>
+      <hr />
+      <h5>Parent Information</h5>
+      <dl className="row">
+        <DetailRow label="Full Name">{student.parent_full_name || "—"}</DetailRow>
+        <DetailRow label="Phone Number">{student.parent_phone_number || "—"}</DetailRow>
+        <DetailRow label="Relationship">{student.parent_relationship || "—"}</DetailRow>
       </dl>
     </ListCard>
   );

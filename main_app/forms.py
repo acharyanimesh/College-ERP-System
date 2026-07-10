@@ -92,12 +92,22 @@ class StudentForm(CustomUserForm):
         min_value=1, initial=1, label='Current Semester',
         widget=forms.NumberInput(attrs={'min': 1, 'step': 1}),
         help_text="The semester this student is currently in (new students start at 1).")
+    middle_name = forms.CharField(required=False, label='Middle Name')
+    parent_full_name = forms.CharField(
+        required=True, max_length=150, label="Parent's Full Name")
+    parent_phone_number = forms.CharField(
+        required=True, max_length=20, label="Parent's Phone Number")
+    parent_relationship = forms.ChoiceField(
+        required=True, label='Relationship with Student',
+        choices=[('Father', 'Father'), ('Mother', 'Mother'),
+                 ('Guardian', 'Guardian'), ('Other', 'Other')])
 
     def __init__(self, *args, **kwargs):
         super(StudentForm, self).__init__(*args, **kwargs)
         self.fields.pop('address', None)
         if kwargs.get('instance'):
             admin = kwargs.get('instance').admin
+            self.fields['middle_name'].initial = admin.middle_name
             self.fields['phone_number'].initial = admin.phone_number
             self.fields['date_of_birth'].initial = admin.date_of_birth
             self.fields['address_line1'].initial = admin.address_line1
@@ -108,7 +118,8 @@ class StudentForm(CustomUserForm):
     class Meta(CustomUserForm.Meta):
         model = Student
         fields = CustomUserForm.Meta.fields + \
-            ['registration_number', 'roll_number', 'course', 'session', 'shift', 'current_semester']
+            ['registration_number', 'roll_number', 'course', 'session', 'shift', 'current_semester',
+             'parent_full_name', 'parent_phone_number', 'parent_relationship']
 
 
 class AdminForm(CustomUserForm):
@@ -159,7 +170,7 @@ class StaffForm(CustomUserForm):
     class Meta(CustomUserForm.Meta):
         model = Staff
         fields = CustomUserForm.Meta.fields + \
-            ['staff_id', 'phone_number', 'date_of_birth', 'courses',
+            ['staff_id', 'phone_number', 'date_of_birth',
              'teaches_morning', 'teaches_day']
 
 

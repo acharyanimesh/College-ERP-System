@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Form building blocks replicating the Django form pages
@@ -43,9 +43,23 @@ export function FormCard({ title, onSubmit, buttonText = "Submit", nonFieldError
   );
 }
 
-/** Two-column row from the templates (<div class="row"> around col-md-6 fields). */
+/** Row of fields with a comfortable gutter (<div class="row g-3"> around col-md-* fields). */
 export function Row({ children }) {
-  return <div className="row">{children}</div>;
+  return <div className="row g-3">{children}</div>;
+}
+
+/**
+ * Section divider for long forms (Add/Edit Student, Add/Edit Staff): an
+ * icon + title with a rule underneath, so a 20-field form reads as a few
+ * short, labelled groups instead of one long column.
+ */
+export function SectionHeading({ icon, title, first = false }) {
+  return (
+    <div className={`form-section-heading ${first ? "form-section-heading-first" : ""}`}>
+      {icon && <i className={`fas fa-${icon} form-section-heading-icon`}></i>}
+      <h5>{title}</h5>
+    </div>
+  );
 }
 
 /** Field error text (Django's {{ field.errors }}). */
@@ -66,18 +80,30 @@ function Group({ col, label, htmlFor, error, help, children }) {
   );
 }
 
-export function TextField({ label, name, value, onChange, type = "text", col, error, help, ...rest }) {
+export function TextField({ label, name, value, onChange, type = "text", col, error, help, icon, ...rest }) {
+  const input = (
+    <input
+      type={type}
+      id={`id_${name}`}
+      name={name}
+      className="form-control"
+      value={value ?? ""}
+      onChange={(e) => onChange(name, e.target.value)}
+      {...rest}
+    />
+  );
   return (
     <Group col={col} label={label} htmlFor={`id_${name}`} error={error} help={help}>
-      <input
-        type={type}
-        id={`id_${name}`}
-        name={name}
-        className="form-control"
-        value={value ?? ""}
-        onChange={(e) => onChange(name, e.target.value)}
-        {...rest}
-      />
+      {icon ? (
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className={`fas fa-${icon}`}></i>
+          </span>
+          {input}
+        </div>
+      ) : (
+        input
+      )}
     </Group>
   );
 }
@@ -99,24 +125,36 @@ export function TextAreaField({ label, name, value, onChange, col, error, rows =
 }
 
 /** options: [{ value, label }]. */
-export function SelectField({ label, name, value, onChange, options, col, error, placeholder, ...rest }) {
+export function SelectField({ label, name, value, onChange, options, col, error, placeholder, icon, ...rest }) {
+  const select = (
+    <select
+      id={`id_${name}`}
+      name={name}
+      className="form-control"
+      value={value ?? ""}
+      onChange={(e) => onChange(name, e.target.value)}
+      {...rest}
+    >
+      {placeholder !== undefined && <option value="">{placeholder}</option>}
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
   return (
     <Group col={col} label={label} htmlFor={`id_${name}`} error={error}>
-      <select
-        id={`id_${name}`}
-        name={name}
-        className="form-control"
-        value={value ?? ""}
-        onChange={(e) => onChange(name, e.target.value)}
-        {...rest}
-      >
-        {placeholder !== undefined && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      {icon ? (
+        <div className="input-group">
+          <span className="input-group-text">
+            <i className={`fas fa-${icon}`}></i>
+          </span>
+          {select}
+        </div>
+      ) : (
+        select
+      )}
     </Group>
   );
 }
@@ -154,6 +192,66 @@ export function FileField({ label, name, onChange, col, error, ...rest }) {
         {...rest}
       />
     </Group>
+  );
+}
+
+/**
+ * Profile photo picker with a circular preview: shows `existingUrl` (the
+ * photo already on file, from the API) until a new `file` is chosen, then
+ * previews that instead. Used by Add/Edit Student and Add/Edit Staff in
+ * place of a bare <FileField>, which just showed "No file chosen".
+ */
+export function AvatarField({ label = "Profile photo", name, file, existingUrl, onChange, error }) {
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const shownUrl = previewUrl || existingUrl;
+
+  return (
+    <div className="form-group">
+      <label>{label}:</label>
+      <div className="avatar-upload">
+        <div className="avatar-upload-preview">
+          {shownUrl ? (
+            <img src={shownUrl} alt="" />
+          ) : (
+            <i className="fas fa-user"></i>
+          )}
+        </div>
+        <div className="avatar-upload-controls">
+          <label htmlFor={`id_${name}`} className="btn btn-secondary btn-sm">
+            <i className="fas fa-camera"></i> Choose Photo
+          </label>
+          <input
+            type="file"
+            id={`id_${name}`}
+            name={name}
+            accept="image/*"
+            className="d-none"
+            onChange={(e) => onChange(name, e.target.files[0] || null)}
+          />
+          {file && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm avatar-upload-clear"
+              onClick={() => onChange(name, null)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+      <FieldError error={error} />
+    </div>
   );
 }
 
