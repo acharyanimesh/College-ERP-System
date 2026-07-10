@@ -47,8 +47,7 @@ import NotificationsPage from "./pages/shared/NotificationsPage";
 import StaffTakeAttendance from "./pages/staff/StaffTakeAttendance";
 import StaffUpdateAttendance from "./pages/staff/StaffUpdateAttendance";
 import StaffViewAttendance from "./pages/staff/StaffViewAttendance";
-import StaffAddResult from "./pages/staff/StaffAddResult";
-import EditStudentResult from "./pages/staff/EditStudentResult";
+import StaffManageResult from "./pages/staff/StaffManageResult";
 import AddBook from "./pages/staff/AddBook";
 import StudentViewAttendance from "./pages/student/StudentViewAttendance";
 import StudentViewResult from "./pages/student/StudentViewResult";
@@ -170,8 +169,7 @@ function App() {
             <Route path="/staff/attendance/view/" element={<StaffViewAttendance />} />
             <Route path="/staff/apply/leave/" element={<ApplyLeave role="staff" />} />
             <Route path="/staff/feedback/" element={<FeedbackPage role="staff" />} />
-            <Route path="/staff/result/add/" element={<StaffAddResult />} />
-            <Route path="/staff/result/edit/" element={<EditStudentResult />} />
+            <Route path="/staff/result/manage/" element={<StaffManageResult />} />
             <Route path="/staff/addbook/" element={<AddBook />} />
             <Route
               path="/staff/view/notification/"

@@ -6,7 +6,10 @@ import { usePageHeader } from "../../layouts/Layout";
 
 /**
  * Student "View Result" (student_template/student_view_result.html):
- * semester selector + subject/test/exam/total table.
+ * semester selector + per-subject marks table (Unit Test/Internal/Pre-board
+ * are numeric, Final Grade is a letter grade). Marks show as soon as staff
+ * enter them; the Status column shows whether the teacher has finalized
+ * (locked) that subject's result yet.
  */
 function StudentViewResult() {
   usePageHeader({
@@ -16,7 +19,7 @@ function StudentViewResult() {
   const [semester, setSemester] = useState("");
 
   // API mirrors the view context: { semesters, selected, rows:
-  //   [{ subject_name, result: {test, exam}|null }] }
+  //   [{ subject_name, finalized, result: {unit_test, internal, pre_board, final_grade}|null }] }
   const { data } = useApi(
     () => resultAPI.getMine(semester ? { semester } : {}),
     [semester]
@@ -56,9 +59,11 @@ function StudentViewResult() {
                 <tr>
                   <th>ID</th>
                   <th>Subject</th>
-                  <th>Test</th>
-                  <th>Exam</th>
-                  <th>Total</th>
+                  <th>Unit Test</th>
+                  <th>Internal</th>
+                  <th>Pre-board</th>
+                  <th>Final Grade</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -69,12 +74,22 @@ function StudentViewResult() {
                       <td>{row.subject_name}</td>
                       {row.result ? (
                         <>
-                          <td>{row.result.test}</td>
-                          <td>{row.result.exam}</td>
-                          <td>{Number(row.result.test) + Number(row.result.exam)}</td>
+                          <td>{row.result.unit_test ?? "—"}</td>
+                          <td>{row.result.internal ?? "—"}</td>
+                          <td>{row.result.pre_board ?? "—"}</td>
+                          <td>{row.result.final_grade || "—"}</td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                row.finalized ? "badge-success" : "badge-secondary"
+                              }`}
+                            >
+                              {row.finalized ? "Finalized" : "In progress"}
+                            </span>
+                          </td>
                         </>
                       ) : (
-                        <td colSpan={3} className="text-muted">
+                        <td colSpan={5} className="text-muted">
                           Not published yet
                         </td>
                       )}
@@ -82,7 +97,7 @@ function StudentViewResult() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="text-center">
+                    <td colSpan={7} className="text-center">
                       No subjects found for this semester.
                     </td>
                   </tr>

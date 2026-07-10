@@ -138,22 +138,30 @@ function StaffUpdateAttendance() {
               <hr />
               <div className="form-group">
                 <label>Student Attendance</label>
-                <div className="list-group student-attendance-list">
-                  {students.map((s) => (
-                    <div
-                      key={s.id}
-                      className="list-group-item d-flex justify-content-between align-items-center flex-wrap"
-                    >
-                      <span className="student-name">
-                        {s.roll_number && <span className="student-roll">{s.roll_number}</span>}
-                        {s.name}
-                      </span>
-                      <StatusButtons
-                        value={statuses[s.id]}
-                        onChange={(val) => setStatuses((m) => ({ ...m, [s.id]: val }))}
-                      />
-                    </div>
-                  ))}
+                <div className="table-responsive student-attendance-table">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Roll No.</th>
+                        <th>Name</th>
+                        <th className="text-end">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map((s) => (
+                        <tr key={s.id}>
+                          <td className="student-roll">{s.roll_number || "—"}</td>
+                          <td className="student-name">{s.name}</td>
+                          <td className="text-end">
+                            <StatusButtons
+                              value={statuses[s.id]}
+                              onChange={(val) => setStatuses((m) => ({ ...m, [s.id]: val }))}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
               <div className="form-group mt-3">

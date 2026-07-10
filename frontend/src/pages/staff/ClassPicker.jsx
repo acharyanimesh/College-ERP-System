@@ -23,34 +23,20 @@ export const PICKER_STYLES = `
     margin-left: 0.35rem;
     filter: invert(0.85);
   }
-  .student-attendance-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    border: none;
+  .student-attendance-table th,
+  .student-attendance-table td {
+    vertical-align: middle;
   }
-  .student-attendance-list .list-group-item {
-    padding: 0.85rem 1rem;
-    background: var(--surface-ivory, #f5f2e8);
-    border: 1px solid var(--border-color, #e5dcc4);
-    border-radius: 8px;
-    color: var(--text-main, #23302e);
-  }
-  .student-attendance-list .student-name {
-    font-weight: 600;
-    font-size: 1.05rem;
-    color: var(--text-main, #23302e);
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .student-attendance-list .student-roll {
+  .student-attendance-table .student-roll {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    color: var(--text-main, #23302e);
+    white-space: nowrap;
   }
-  .student-attendance-list .attendance-status .status-btn { min-width: 90px; }
-  .student-attendance-list .status-badge {
+  .student-attendance-table .student-name {
+    font-weight: 600;
+  }
+  .student-attendance-table .attendance-status .status-btn { min-width: 90px; }
+  .student-attendance-table .status-badge {
     min-width: 90px;
     text-align: center;
     font-size: 0.85rem;

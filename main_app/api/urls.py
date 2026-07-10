@@ -64,10 +64,10 @@ urlpatterns = [
          attendance.attendance_students),
 
     # Results
-    path("results/", results.save),
     path("results/classes/", results.classes),
-    path("results/students/", results.class_students),
-    path("results/fetch/", results.fetch),
+    path("results/class/", results.class_results),
+    path("results/class/save/", results.save_class_results),
+    path("results/class/finalize/", results.finalize),
     path("results/mine/", results.mine),
 
     # Leave

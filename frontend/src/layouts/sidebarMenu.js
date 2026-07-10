@@ -85,8 +85,7 @@ export const STAFF_MENU = [
   {
     title: "Academic Management",
     items: [
-      { text: "Add Result", icon: "fas fa-plus-circle", to: "/staff/result/add/" },
-      { text: "Edit Results", icon: "fas fa-edit", to: "/staff/result/edit/" },
+      { text: "Manage Result", icon: "fas fa-clipboard-list", to: "/staff/result/manage/" },
     ],
   },
   {

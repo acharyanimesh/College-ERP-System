@@ -12,9 +12,9 @@ const QUICK_ACTIONS = [
     btn: "btn-primary",
   },
   {
-    text: "Add Result",
-    icon: "fas fa-plus-circle",
-    to: "/staff/result/add/",
+    text: "Manage Result",
+    icon: "fas fa-clipboard-list",
+    to: "/staff/result/manage/",
     btn: "btn-success",
   },
   {

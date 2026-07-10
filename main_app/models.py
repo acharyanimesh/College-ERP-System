@@ -309,13 +309,43 @@ class NotificationStudent(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+# A+/A/A- down to D+/D/D-, plus a plain F (no F+/F-).
+FINAL_GRADE_CHOICES = [(g, g) for g in (
+    "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F",
+)]
+
+
 class StudentResult(models.Model):
+    """One student's marks for one subject at one (course, semester) — kept
+    even after the student is promoted, since `semester` is recorded here
+    rather than read off the student's current state."""
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
-    test = models.FloatField(default=0)
-    exam = models.FloatField(default=0)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    semester = models.PositiveSmallIntegerField()
+    unit_test = models.FloatField(null=True, blank=True)
+    internal = models.FloatField(null=True, blank=True)
+    pre_board = models.FloatField(null=True, blank=True)
+    final_grade = models.CharField(
+        max_length=2, blank=True, default="", choices=FINAL_GRADE_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'subject', 'course', 'semester')
+
+
+class ResultFinalization(models.Model):
+    """Marks one (course, subject, semester) result set as locked. Staff can
+    no longer edit any student's marks/grade for it once finalized; the
+    finalize action itself requires every student's marks to be complete."""
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    semester = models.PositiveSmallIntegerField()
+    finalized_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('course', 'subject', 'semester')
 
 
 @receiver(post_save, sender=CustomUser)
