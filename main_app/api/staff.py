@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from ..emails import send_verification_email
 from ..forms import StaffForm
 from ..models import CourseSubject, CustomUser, Staff
 from .permissions import IsAdmin
@@ -51,7 +52,9 @@ def staff_list(request):
             Lower('admin__first_name'), Lower('admin__last_name'))
         return Response([staff_row(s) for s in staff_members])
 
-    # POST — mirrors hod_views.add_staff.
+    # POST — mirrors hod_views.add_staff. The account is created inactive
+    # with no usable password; the owner sets their own password (and
+    # activates the account) via the emailed verification link.
     form = StaffForm(request.data, request.FILES)
     if not form.is_valid():
         return Response(form_errors(form), status=status.HTTP_400_BAD_REQUEST)
@@ -59,7 +62,7 @@ def staff_list(request):
     passport_url = _save_profile_pic(request.FILES) or ''
     try:
         user = CustomUser.objects.create_user(
-            email=get('email'), password=get('password'), user_type=2,
+            email=get('email'), user_type=2, is_active=False,
             first_name=get('first_name'), last_name=get('last_name'),
             profile_pic=passport_url)
         _apply_user_fields(user, form)
@@ -70,7 +73,15 @@ def staff_list(request):
     except Exception as e:
         return Response({'detail': "Could Not Add " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
-    return Response(staff_detail(staff), status=status.HTTP_201_CREATED)
+
+    data = staff_detail(staff)
+    try:
+        send_verification_email(user)
+    except Exception:
+        data['detail'] = ("Staff account created, but the verification email "
+                          "could not be sent. Use \"Resend verification email\" "
+                          "from the staff list once email delivery is fixed.")
+    return Response(data, status=status.HTTP_201_CREATED)
 
 
 def _assignments_for(staff):
@@ -130,6 +141,22 @@ def staff_item(request, staff_id):
         return Response({'detail': "Could Not Update " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
     return Response(staff_detail(staff))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def resend_verification(request, staff_id):
+    staff = get_object_or_404(Staff, id=staff_id)
+    user = staff.admin
+    if user.is_active:
+        return Response({'detail': 'This account is already verified.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        send_verification_email(user)
+    except Exception as e:
+        return Response({'detail': "Could not send the email: " + str(e)},
+                        status=status.HTTP_400_BAD_REQUEST)
+    return Response({'detail': 'Verification email sent.'})
 
 
 @api_view(['GET', 'POST'])

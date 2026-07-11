@@ -27,6 +27,9 @@ def user_dict(user):
         'user_type': str(user.user_type),
         'gender': user.gender,
         'profile_pic': user.profile_pic.url if user.profile_pic else '',
+        'email_verified': user.email_verified,
+        'pending_email': user.pending_email,
+        'pending_email_approved': user.pending_email_approved,
     }
 
 
@@ -69,6 +72,7 @@ def student_row(student):
         'shift_display': student.get_shift_display(),
         'session_label': str(student.session) if student.session else '',
         'passed_out_date': student.passed_out_date.isoformat() if student.passed_out_date else None,
+        'verified': user.email_verified,
     }
 
 
@@ -105,6 +109,7 @@ def staff_row(staff):
         'first_name': user.first_name,
         'last_name': user.last_name,
         'email': user.email,
+        'verified': user.email_verified,
     }
 
 

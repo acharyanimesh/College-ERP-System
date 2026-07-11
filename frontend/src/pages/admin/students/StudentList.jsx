@@ -51,6 +51,18 @@ function StudentList() {
     }
   };
 
+  const resend = async (student) => {
+    try {
+      await studentAPI.resendVerification(student.id);
+      addMessage("Verification email sent.", "success");
+    } catch (err) {
+      addMessage(
+        err.response?.data?.detail || "Could not send the verification email.",
+        "danger"
+      );
+    }
+  };
+
   return (
     <ListCard
       title={title}
@@ -79,20 +91,21 @@ function StudentList() {
             <th>Full Name</th>
             <th>Email</th>
             <th>Course</th>
+            <th>Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {students && !students.length && (
             <tr>
-              <td colSpan={7} className="text-center">
+              <td colSpan={8} className="text-center">
                 No students enrolled in this course.
               </td>
             </tr>
           )}
           {students?.length > 0 && !visible.length && (
             <tr>
-              <td colSpan={7} className="text-center">
+              <td colSpan={8} className="text-center">
                 No students match your search.
               </td>
             </tr>
@@ -111,7 +124,26 @@ function StudentList() {
               </td>
               <td>{s.email}</td>
               <td title={s.course_name}>{s.course_short_name}</td>
+              <td>
+                {s.verified ? (
+                  <span className="badge badge-success">Verified</span>
+                ) : (
+                  <span className="badge badge-warning">Pending verification</span>
+                )}
+              </td>
               <td className="text-nowrap" onClick={(e) => e.stopPropagation()}>
+                {!s.verified && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      title="Resend verification email"
+                      onClick={() => resend(s)}
+                    >
+                      <i className="fas fa-paper-plane"></i>
+                    </button>{" "}
+                  </>
+                )}
                 <Link
                   to={`/student/edit/${s.id}`}
                   className="btn btn-sm btn-info"

@@ -316,20 +316,26 @@ function StudentFormPage({ edit = false }) {
       </Row>
 
       <SectionHeading icon="lock" title="Account Security" />
-      <Row>
-        <TextField
-          col="col-md-6"
-          label="Password"
-          name="password"
-          type="password"
-          icon="lock"
-          value={fields.password}
-          onChange={setField}
-          error={errors.password}
-          placeholder={edit ? "Fill this only if you wish to update password" : undefined}
-          required={!edit}
-        />
-      </Row>
+      {edit ? (
+        <Row>
+          <TextField
+            col="col-md-6"
+            label="Password"
+            name="password"
+            type="password"
+            icon="lock"
+            value={fields.password}
+            onChange={setField}
+            error={errors.password}
+            placeholder="Fill this only if you wish to update password"
+          />
+        </Row>
+      ) : (
+        <p className="text-muted">
+          A verification email will be sent to the address above; the student
+          sets their own password by following the link in it.
+        </p>
+      )}
     </FormCard>
   );
 }

@@ -35,6 +35,11 @@ const studentAPI = {
     return axiosClient.delete(`/students/${studentId}/`);
   },
 
+  /** Re-send the verification email for a not-yet-verified student. */
+  resendVerification(studentId) {
+    return axiosClient.post(`/students/${studentId}/resend-verification/`);
+  },
+
   /** Promote semester N & above for a course (cascade promotion). */
   promote(courseId, fromSemester) {
     return axiosClient.post(`/courses/${courseId}/promote/`, {

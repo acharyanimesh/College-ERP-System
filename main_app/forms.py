@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.forms.widgets import DateInput, TextInput
 from django.core.validators import RegexValidator
 
@@ -31,12 +32,19 @@ class FormSettings(forms.ModelForm):
 
 
 class CustomUserForm(FormSettings):
+    # Subclasses (StaffForm/StudentForm) restrict which email domains are
+    # acceptable for that role; None means no restriction (e.g. AdminForm).
+    allowed_email_domains = None
+    # Subclasses whose owner sets their own password via the email
+    # verification link (StaffForm/StudentForm) don't require one on insert.
+    password_required_on_insert = True
+
     email = forms.EmailField(required=True)
     gender = forms.ChoiceField(choices=[('M', 'Male'), ('F', 'Female')])
     first_name = forms.CharField(required=True)
     last_name = forms.CharField(required=True)
     address = forms.CharField(widget=forms.Textarea)
-    password = forms.CharField(widget=forms.PasswordInput)
+    password = forms.CharField(widget=forms.PasswordInput, required=False)
     widget = {
         'password': forms.PasswordInput(),
     }
@@ -52,19 +60,28 @@ class CustomUserForm(FormSettings):
                 self.fields[field].initial = instance.get(field)
             if self.instance.pk is not None:
                 self.fields['password'].widget.attrs['placeholder'] = "Fill this only if you wish to update password"
+        else:
+            self.fields['password'].required = self.password_required_on_insert
 
     def clean_email(self, *args, **kwargs):
         formEmail = self.cleaned_data['email'].lower()
-        if self.instance.pk is None:  # Insert
+
+        is_new_or_changed = True
+        if self.instance.pk is not None:
+            dbEmail = self.Meta.model.objects.get(
+                id=self.instance.pk).admin.email.lower()
+            is_new_or_changed = dbEmail != formEmail
+
+        if is_new_or_changed:
+            if self.allowed_email_domains:
+                domain = formEmail.rsplit('@', 1)[-1]
+                if domain not in self.allowed_email_domains:
+                    raise forms.ValidationError(
+                        "Email must be one of these domains: %s" % ", ".join(
+                            '@' + d for d in self.allowed_email_domains))
             if CustomUser.objects.filter(email=formEmail).exists():
                 raise forms.ValidationError(
                     "The given email is already registered")
-        else:  # Update
-            dbEmail = self.Meta.model.objects.get(
-                id=self.instance.pk).admin.email.lower()
-            if dbEmail != formEmail:  # There has been changes
-                if CustomUser.objects.filter(email=formEmail).exists():
-                    raise forms.ValidationError("The given email is already registered")
 
         return formEmail
 
@@ -74,6 +91,9 @@ class CustomUserForm(FormSettings):
 
 
 class StudentForm(CustomUserForm):
+    allowed_email_domains = settings.STUDENT_ALLOWED_EMAIL_DOMAINS
+    password_required_on_insert = False
+
     registration_number = forms.CharField(
         required=True, max_length=14, label='Registration Number',
         validators=[RegexValidator(r'^\d{4}-\d{4}-\d{4}$', 'Registration number must be 12 digits (formatted as XXXX-XXXX-XXXX)')])
@@ -132,6 +152,9 @@ class AdminForm(CustomUserForm):
 
 
 class StaffForm(CustomUserForm):
+    allowed_email_domains = settings.STAFF_ALLOWED_EMAIL_DOMAINS
+    password_required_on_insert = False
+
     staff_id = forms.CharField(
         required=True, max_length=6,
         validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])

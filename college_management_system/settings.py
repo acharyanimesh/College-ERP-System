@@ -18,6 +18,18 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load a gitignored .env file (KEY=VALUE per line) into os.environ so local
+# secrets like the SMTP password live in one file instead of having to be
+# re-exported in every new terminal session. Real environment variables
+# still win over the file.
+_env_file = BASE_DIR / '.env'
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _key, _, _value = _line.partition('=')
+            os.environ.setdefault(_key.strip(), _value.strip())
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
@@ -176,17 +188,38 @@ SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds (default)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # This will be overridden by remember me
 SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request to extend expiry
 
-# EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
-# EMAIL_FILE_PATH = os.path.join(BASE_DIR, "sent_mails")
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = True
-# DEFAULT_FROM_EMAIL = "School Management System <admin@admin.com>"
+
+# Real SMTP only kicks in once credentials are supplied via env vars;
+# otherwise emails just print to the runserver console (dev-friendly, and
+# lets the verification-email link still be copy-pasted for testing).
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    # Py3.12+-compatible subclass of Django 3.1's SMTP backend.
+    EMAIL_BACKEND = 'college_management_system.smtp_backend.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'College ERP <noreply@example.edu>')
+
+# Base URL of the deployed React frontend, used to build links (e.g. the
+# email-verification link) that are sent out in emails.
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+
+# Which email domains are acceptable for accounts. For now everyone (admin,
+# staff, student) may use any common personal provider or the college domain;
+# tighten these lists later if you want staff/admin restricted to the
+# institutional domain only.
+ALLOWED_EMAIL_DOMAINS = [
+    'gmail.com', 'outlook.com', 'hotmail.com', 'live.com',
+    'yahoo.com', 'icloud.com', 'me.com', 'proton.me', 'protonmail.com',
+    'ncit.edu.np',
+]
+STAFF_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
+STUDENT_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
 
 # Non-manifest storage: Vite already content-hashes the React bundle, and the
 # legacy AdminLTE plugin CSS has broken url() refs the manifest storage

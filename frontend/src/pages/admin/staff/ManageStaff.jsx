@@ -36,6 +36,18 @@ function ManageStaff() {
     }
   };
 
+  const resend = async (staff) => {
+    try {
+      await staffAPI.resendVerification(staff.id);
+      addMessage("Verification email sent.", "success");
+    } catch (err) {
+      addMessage(
+        err.response?.data?.detail || "Could not send the verification email.",
+        "danger"
+      );
+    }
+  };
+
   return (
     <ListCard title="Manage Staff" scrollBody>
       <div className="form-group" style={{ maxWidth: 360 }}>
@@ -54,13 +66,14 @@ function ManageStaff() {
             <th>Staff ID</th>
             <th>Full Name</th>
             <th>Email</th>
+            <th>Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {allStaff?.length > 0 && !visible.length && (
             <tr>
-              <td colSpan={5} className="text-center">
+              <td colSpan={6} className="text-center">
                 No staff match your search.
               </td>
             </tr>
@@ -77,7 +90,26 @@ function ManageStaff() {
                 {s.first_name} {s.last_name}
               </td>
               <td>{s.email}</td>
+              <td>
+                {s.verified ? (
+                  <span className="badge badge-success">Verified</span>
+                ) : (
+                  <span className="badge badge-warning">Pending verification</span>
+                )}
+              </td>
               <td className="text-nowrap" onClick={(e) => e.stopPropagation()}>
+                {!s.verified && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      title="Resend verification email"
+                      onClick={() => resend(s)}
+                    >
+                      <i className="fas fa-paper-plane"></i>
+                    </button>{" "}
+                  </>
+                )}
                 <Link
                   to={`/staff/assign-subjects/${s.id}`}
                   className="btn btn-sm btn-success"

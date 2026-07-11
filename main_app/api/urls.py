@@ -11,6 +11,19 @@ urlpatterns = [
     path("auth/logout/", auth.logout_view),
     path("auth/me/", auth.me),
     path("auth/check-email/", auth.check_email),
+    path("auth/verify-email/<str:uidb64>/<str:token>/", auth.verify_email_view),
+    path("auth/admin/request-email-verification/",
+         auth.request_admin_email_verification),
+    path("auth/admin/verify-email/<str:uidb64>/<str:token>/",
+         auth.confirm_admin_email_verification),
+    path("auth/request-email-change/", auth.request_email_change),
+    path("auth/verify-email-change/<str:uidb64>/<str:token>/",
+         auth.confirm_admin_email_verification),
+    path("auth/admin/email-change-requests/", auth.email_change_requests),
+    path("auth/admin/email-change-requests/<int:user_id>/approve/",
+         auth.approve_email_change),
+    path("auth/admin/email-change-requests/<int:user_id>/reject/",
+         auth.reject_email_change),
 
     # Dashboards
     path("dashboard/admin/", dashboard.admin_home),
@@ -32,11 +45,14 @@ urlpatterns = [
     path("students/passed-out/courses/<int:course_id>/sessions/",
          students.passed_out_sessions),
     path("students/<int:student_id>/", students.student_item),
+    path("students/<int:student_id>/resend-verification/",
+         students.resend_verification),
 
     # Staff (admin management)
     path("staff/", staff.staff_list),
     path("staff/<int:staff_id>/", staff.staff_item),
     path("staff/<int:staff_id>/subject-assignments/", staff.subject_assignments),
+    path("staff/<int:staff_id>/resend-verification/", staff.resend_verification),
 
     # Academics
     path("courses/", academics.course_list),

@@ -2,7 +2,11 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-route
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout, { usePageHeader } from "./layouts/Layout";
 import Login from "./pages/Login";
+import VerifyEmail from "./pages/VerifyEmail";
+import VerifyAdminEmail from "./pages/VerifyAdminEmail";
+import VerifyEmailChange from "./pages/VerifyEmailChange";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminEmailSetup from "./pages/admin/AdminEmailSetup";
 import StaffDashboard from "./pages/staff/StaffDashboard";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentFormPage from "./pages/admin/students/StudentFormPage";
@@ -40,6 +44,7 @@ import {
 } from "./pages/admin/notify/NotifyStudentPages";
 import LeaveView from "./pages/admin/review/LeaveView";
 import FeedbackView from "./pages/admin/review/FeedbackView";
+import EmailChangeRequestsView from "./pages/admin/review/EmailChangeRequestsView";
 import ProfilePage from "./pages/shared/ProfilePage";
 import ApplyLeave from "./pages/shared/ApplyLeave";
 import FeedbackPage from "./pages/shared/FeedbackPage";
@@ -72,7 +77,9 @@ function PlaceholderPage() {
 /**
  * Auth gate around the app chrome, replacing Django's @login_required:
  * waits for the session check, then either shows the layout or bounces to
- * the login screen.
+ * the login screen. Admin/HOD accounts additionally can't reach the app
+ * chrome at all until they've confirmed a real institutional email
+ * (see AdminEmailSetup.jsx) — their bootstrap login doesn't count.
  */
 function ProtectedLayout() {
   const { user, loading, logout } = useAuth();
@@ -80,6 +87,7 @@ function ProtectedLayout() {
 
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
+  if (user.user_type === "1" && !user.email_verified) return <AdminEmailSetup />;
 
   const handleLogout = async () => {
     await logout();
@@ -96,6 +104,11 @@ function App() {
         <Routes>
           {/* Login (redirects home when already authenticated) */}
           <Route path="/" element={<Login />} />
+
+          {/* Reached from emailed verification links; no session required */}
+          <Route path="/verify-email/:uidb64/:token" element={<VerifyEmail />} />
+          <Route path="/verify-admin-email/:uidb64/:token" element={<VerifyAdminEmail />} />
+          <Route path="/verify-email-change/:uidb64/:token" element={<VerifyEmailChange />} />
 
           {/* Everything behind the session, mirroring Django's URL paths */}
           <Route element={<ProtectedLayout />}>
@@ -161,6 +174,7 @@ function App() {
             <Route path="/student/view/leave/" element={<LeaveView role="student" />} />
             <Route path="/staff/view/feedback/" element={<FeedbackView role="staff" />} />
             <Route path="/student/view/feedback/" element={<FeedbackView role="student" />} />
+            <Route path="/admin/email-change-requests/" element={<EmailChangeRequestsView />} />
             <Route path="/admin_view_profile" element={<ProfilePage />} />
 
             {/* Staff role pages */}

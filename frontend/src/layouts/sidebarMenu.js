@@ -72,6 +72,16 @@ export const ADMIN_MENU = [
       { text: "Student Leave", icon: "fas fa-calendar-times", to: "/student/view/leave/" },
     ],
   },
+  {
+    title: "Account Requests",
+    items: [
+      {
+        text: "Email Change Requests",
+        icon: "fas fa-envelope-open-text",
+        to: "/admin/email-change-requests/",
+      },
+    ],
+  },
 ];
 
 export const STAFF_MENU = [

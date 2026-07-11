@@ -29,6 +29,11 @@ const staffAPI = {
     return axiosClient.delete(`/staff/${staffId}/`);
   },
 
+  /** Re-send the verification email for a not-yet-verified staff member. */
+  resendVerification(staffId) {
+    return axiosClient.post(`/staff/${staffId}/resend-verification/`);
+  },
+
   /** Data for the assign-subjects page (assign_staff_subjects GET). */
   getSubjectAssignments(staffId) {
     return axiosClient.get(`/staff/${staffId}/subject-assignments/`);

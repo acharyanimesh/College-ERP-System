@@ -51,6 +51,15 @@ export function AuthProvider({ children }) {
     return profile;
   }, []);
 
+  /** Re-fetches /auth/me/ — used after actions that change fields on the
+   * logged-in user object itself (e.g. requesting an email change) so the
+   * UI reflects the new pending_email without a full reload. */
+  const refreshUser = useCallback(async () => {
+    const profile = await authAPI.me();
+    setUser(profile);
+    return profile;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authAPI.logout();
@@ -62,7 +71,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

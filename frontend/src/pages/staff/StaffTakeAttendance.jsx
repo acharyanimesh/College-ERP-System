@@ -113,6 +113,16 @@ function StaffTakeAttendance() {
         window.alert(
           "These students have no session/intake set, so attendance cannot be recorded. Please set their session first."
         );
+      } else if (code === "ALREADY_CONFIRMED") {
+        window.alert(
+          "Attendance for this subject/shift on this date has already been confirmed and cannot be taken again."
+        );
+        setStudents(null);
+      } else if (code === "ALREADY_TAKEN") {
+        window.alert(
+          "Attendance for this subject/shift on this date has already been saved. Use Update Attendance to edit or confirm it instead of taking it again."
+        );
+        setStudents(null);
       } else {
         window.alert("Error in saving attendance");
       }

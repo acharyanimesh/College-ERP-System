@@ -65,6 +65,23 @@ class CustomUser(AbstractUser):
     fcm_token = models.TextField(default="")  # For firebase notifications
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Staff/Student: flips to True together with is_active, the moment they
+    # follow their account-creation email and set a password. Admin/HOD:
+    # is_active is already True from creation (they need to be able to log
+    # in immediately with a bootstrap password), so this is the ONLY signal
+    # gating their separate first-login "confirm your institutional email"
+    # flow — see api/auth.py's request/confirm_admin_email_verification.
+    email_verified = models.BooleanField(default=False)
+    # A new email address entered (via first-login setup or the profile
+    # page) but not yet confirmed via the emailed link. Kept separate from
+    # `email` so a failed or abandoned change never leaves the account
+    # unable to log back in under its original address.
+    pending_email = models.EmailField(blank=True, default="")
+    # Staff/Student only: an admin must approve a `pending_email` change
+    # (submitted from the profile page) before the verification link is
+    # emailed to it — see api/auth.py's request/approve/reject_email_change.
+    # Admin/HOD's own pending_email changes skip this gate entirely.
+    pending_email_approved = models.BooleanField(default=False)
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
     objects = CustomUserManager()
@@ -250,6 +267,9 @@ class Attendance(models.Model):
     locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('subject', 'course', 'semester', 'shift', 'date')
 
 
 class AttendanceReport(models.Model):

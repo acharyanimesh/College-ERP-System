@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from django.db.models import F
 
+from ..emails import send_verification_email
 from ..forms import StudentForm
 from ..models import SHIFT_CHOICES, Course, CustomUser, Session, Student
 from .permissions import IsAdmin
@@ -123,7 +124,7 @@ def student_list(request):
                             course.short_name, "; ".join(bits))
 
             user = CustomUser.objects.create_user(
-                email=get('email'), password=get('password'), user_type=3,
+                email=get('email'), user_type=3, is_active=False,
                 first_name=get('first_name'), last_name=get('last_name'),
                 profile_pic=passport_url)
             _apply_user_fields(user, form)
@@ -143,6 +144,13 @@ def student_list(request):
         return Response({'detail': "Could Not Add: " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
     data = student_detail(student)
+    try:
+        send_verification_email(user)
+    except Exception:
+        promo_msg = (promo_msg + " " if promo_msg else "") + (
+            "Student account created, but the verification email could not be "
+            "sent. Use \"Resend verification email\" from the student list "
+            "once email delivery is fixed.")
     if promo_msg:
         data['detail'] = promo_msg
     return Response(data, status=status.HTTP_201_CREATED)
@@ -189,6 +197,22 @@ def student_item(request, student_id):
         return Response({'detail': "Could Not Update " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
     return Response(student_detail(student))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def resend_verification(request, student_id):
+    student = get_object_or_404(Student, id=student_id)
+    user = student.admin
+    if user.is_active:
+        return Response({'detail': 'This account is already verified.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        send_verification_email(user)
+    except Exception as e:
+        return Response({'detail': "Could not send the email: " + str(e)},
+                        status=status.HTTP_400_BAD_REQUEST)
+    return Response({'detail': 'Verification email sent.'})
 
 
 @api_view(['POST'])

@@ -109,6 +109,13 @@ def attendance_list(request):
             **{shift_field: staff}).exists():
         return Response({'code': 'NOT_ASSIGNED'}, status=status.HTTP_400_BAD_REQUEST)
 
+    existing = Attendance.objects.filter(
+        subject=subject, course_id=course_id, semester=semester,
+        shift=shift, date=data.get('date')).first()
+    if existing is not None:
+        code = 'ALREADY_CONFIRMED' if existing.locked else 'ALREADY_TAKEN'
+        return Response({'code': code}, status=status.HTTP_400_BAD_REQUEST)
+
     cohort = Student.objects.filter(id__in=[s.get('id') for s in students])
     first_student = cohort.first()
     session = first_student.session if first_student else None

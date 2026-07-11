@@ -28,6 +28,34 @@ const authAPI = {
   checkEmail(email) {
     return axiosClient.post("/auth/check-email/", { email });
   },
+
+  /** Confirm a Staff/Student's emailed verification link and set their first password. */
+  verifyEmail(uidb64, token, password) {
+    return axiosClient.post(`/auth/verify-email/${uidb64}/${token}/`, { password });
+  },
+
+  /** Admin first-login step: submit the institutional email to confirm. */
+  requestAdminEmailVerification(email) {
+    return axiosClient.post("/auth/admin/request-email-verification/", { email });
+  },
+
+  /** Confirm the link emailed by requestAdminEmailVerification. */
+  confirmAdminEmailVerification(uidb64, token) {
+    return axiosClient.post(`/auth/admin/verify-email/${uidb64}/${token}/`);
+  },
+
+  /**
+   * Staff/Student profile step: submit a new email address. Unlike the
+   * admin flow above, no link is sent yet — it's queued for admin approval.
+   */
+  requestEmailChange(email) {
+    return axiosClient.post("/auth/request-email-change/", { email });
+  },
+
+  /** Confirm the link emailed after an admin approves requestEmailChange. */
+  confirmEmailChange(uidb64, token) {
+    return axiosClient.post(`/auth/verify-email-change/${uidb64}/${token}/`);
+  },
 };
 
 export default authAPI;
