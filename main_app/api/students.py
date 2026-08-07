@@ -12,6 +12,9 @@ from django.db.models import F
 
 from ..emails import send_verification_email
 from ..forms import StudentForm
+from ..idgen import (
+    assign_student_numbers, batch_lock_state, lock_batches_for_course,
+    resequence_cohort)
 from ..models import SHIFT_CHOICES, Course, CustomUser, Session, Student
 from .permissions import IsAdmin
 from .serializers import course_dict, form_errors, student_detail, student_row
@@ -29,6 +32,14 @@ def _cascade_promote_course(course, from_semester):
     graduated = grads.count()
     if graduated:
         grads.update(passed_out=True, passed_out_date=date_cls.today())
+    # Roll numbers stay alphabetical only while an intake is still filling up.
+    # Leaving Semester 1 is the point of no return: from here the cohort has
+    # attendance and results filed under these numbers, so freeze them before
+    # anyone moves and let late arrivals be appended instead.
+    leaving_sem_one = Student.objects.filter(
+        course=course, passed_out=False, current_semester=1,
+        current_semester__gte=from_semester).values_list('session', flat=True)
+    lock_batches_for_course(course, list(leaving_sem_one))
     # Updating off the OLD value (highest-to-lowest is irrelevant for a single
     # bulk +1) keeps each batch separate, so a lower one never mixes into the next.
     promoted = Student.objects.filter(
@@ -130,8 +141,6 @@ def student_list(request):
             _apply_user_fields(user, form)
             user.save()
             student = user.student
-            student.registration_number = get('registration_number')
-            student.roll_number = get('roll_number')
             student.session = session
             student.course = course
             student.shift = get('shift')
@@ -140,6 +149,15 @@ def student_list(request):
             student.parent_phone_number = get('parent_phone_number')
             student.parent_relationship = get('parent_relationship')
             student.save()
+            # Registration + roll number are derived from session/course, so
+            # they can only be issued once those are on the saved row.
+            shifted = assign_student_numbers(student)
+            if shifted:
+                roll_msg = (
+                    "Roll numbers are alphabetical, so adding this student "
+                    "renumbered %d other%s in the same batch."
+                    % (shifted, "" if shifted == 1 else "s"))
+                promo_msg = (promo_msg + " " if promo_msg else "") + roll_msg
     except Exception as e:
         return Response({'detail': "Could Not Add: " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -164,7 +182,12 @@ def student_item(request, student_id):
         return Response(student_detail(student))
 
     if request.method == 'DELETE':
-        student.admin.delete()
+        session, course = student.session, student.course
+        with transaction.atomic():
+            student.admin.delete()      # cascades to the Student row
+            # Close the hole in an open cohort's alphabetical run. A locked one
+            # keeps its gap: those numbers are already on record elsewhere.
+            resequence_cohort(session, course)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # PUT — mirrors hod_views.edit_student.
@@ -174,6 +197,13 @@ def student_item(request, student_id):
     get = form.cleaned_data.get
     try:
         user = student.admin
+        # Both identifiers are derived, so an edit has to notice everything
+        # they are derived from: the session (registration number), the course
+        # and shift (roll number), and the name (position within it).
+        old_session, old_course = student.session, student.course
+        old_shift = student.shift
+        old_name = (user.last_name, user.first_name, user.middle_name)
+
         user.email = get('email')
         password = get('password') or None
         if password is not None:
@@ -182,8 +212,6 @@ def student_item(request, student_id):
         if passport_url is not None:
             user.profile_pic = passport_url
         _apply_user_fields(user, form)
-        student.registration_number = get('registration_number')
-        student.roll_number = get('roll_number')
         student.session = get('session')
         student.course = get('course')
         student.shift = get('shift')
@@ -191,8 +219,28 @@ def student_item(request, student_id):
         student.parent_full_name = get('parent_full_name')
         student.parent_phone_number = get('parent_phone_number')
         student.parent_relationship = get('parent_relationship')
-        user.save()
-        student.save()
+
+        session_changed = old_session != student.session
+        course_changed = old_course != student.course
+        shift_changed = old_shift != student.shift
+        renamed = old_name != (
+            user.last_name, user.first_name, user.middle_name)
+
+        with transaction.atomic():
+            user.save()
+            student.save()
+            if session_changed or course_changed or shift_changed:
+                # Close the gap they left behind, then issue fresh numbers
+                # where they landed. A shift move stays inside the same intake,
+                # so one resequence covers both runs. The old registration
+                # number belongs to the old intake's series, so it only
+                # survives a course or shift move.
+                resequence_cohort(old_session, old_course)
+                assign_student_numbers(
+                    student, reissue_registration=session_changed)
+            elif renamed:
+                resequence_cohort(student.session, student.course)
+                student.refresh_from_db(fields=['roll_number'])
     except Exception as e:
         return Response({'detail': "Could Not Update " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -260,6 +308,13 @@ def manage_courses(request):
     return Response(course_data)
 
 
+def _sessions_at(course, semester):
+    """Session ids of `course`'s active students in `semester`."""
+    return list(Student.objects.filter(
+        course=course, current_semester=semester, passed_out=False
+    ).values_list('session', flat=True).distinct())
+
+
 @api_view(['GET'])
 @permission_classes([IsAdmin])
 def manage_semesters(request, course_id):
@@ -271,11 +326,58 @@ def manage_semesters(request, course_id):
             'number': sem,
             'student_count': Student.objects.filter(
                 course=course, current_semester=sem, passed_out=False).count(),
+            # Whether this semester's intake(s) still renumber alphabetically.
+            'roll_lock': batch_lock_state(course, _sessions_at(course, sem)),
         })
     return Response({
         'course': course_dict(course),
         'total_semesters': total_semesters,
         'semester_data': semester_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def roll_number_lock(request, course_id, semester):
+    """Freeze alphabetical renumbering for a semester's intakes.
+
+    Locking is what the admin does when admissions close: from then on a late
+    arrival is appended at the end of the batch instead of pushing everyone who
+    sorts after them down one. Promotion out of Semester 1 does this
+    automatically too — this is the manual control for closing earlier.
+
+    There is no unlock. Once an intake's numbers are frozen they are on
+    attendance sheets and marksheets, so the admin re-enters their own password
+    here to confirm they mean a one-way change.
+    """
+    password = request.data.get('password') or ''
+    if not request.user.check_password(password):
+        return Response(
+            {'detail': "That password is not correct. Roll numbers were not "
+                       "locked."},
+            status=status.HTTP_403_FORBIDDEN)
+
+    course = get_object_or_404(Course, id=course_id)
+    session_ids = _sessions_at(course, semester)
+    if not session_ids:
+        return Response({'detail': "No students in Semester %d of %s."
+                         % (semester, course.short_name)},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        changed = lock_batches_for_course(course, session_ids)
+
+    if not changed:
+        detail = ("Roll numbers for Semester %d of %s were already locked."
+                  % (semester, course.short_name))
+    else:
+        detail = ("Roll numbers locked for %d intake(s) in Semester %d of %s. "
+                  "New students are now added at the end of the batch, and "
+                  "this cannot be undone."
+                  % (changed, semester, course.short_name))
+    return Response({
+        'detail': detail,
+        'roll_lock': batch_lock_state(course, session_ids),
     })
 
 

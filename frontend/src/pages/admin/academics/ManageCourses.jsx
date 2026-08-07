@@ -31,6 +31,7 @@ function ManageCourses() {
           <tr>
             <th>#</th>
             <th>Course</th>
+            <th title="Digits 3-4 of this course's roll numbers">Code</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -48,6 +49,7 @@ function ManageCourses() {
                   {course.name_with_abbr || course.name}
                 </Link>
               </td>
+              <td>{course.code || "—"}</td>
               <td className="text-nowrap">
                 <Link to={`/course/edit/${course.id}`} className="btn btn-sm btn-info" title="Edit">
                   <i className="fas fa-edit"></i>

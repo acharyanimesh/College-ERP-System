@@ -38,6 +38,7 @@ def course_dict(course):
         'id': course.id,
         'name': course.name,
         'abbreviation': course.abbreviation,
+        'code': course.code or '',
         'short_name': course.short_name,
         'name_with_abbr': course.name_with_abbr,
         'semesters': course.semesters,

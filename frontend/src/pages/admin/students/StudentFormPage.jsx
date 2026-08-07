@@ -83,14 +83,6 @@ function StudentFormPage({ edit = false }) {
   }, [edit, studentId, addMessage]);
 
   const setField = (name, value) => {
-    if (name === "registration_number") {
-      // 12 digits, auto-grouped as XXXX-XXXX-XXXX (template custom_js).
-      const digits = value.replace(/\D/g, "").slice(0, 12);
-      value = digits.replace(/(\d{4})(?=\d)/g, "$1-");
-    }
-    if (name === "roll_number") {
-      value = value.replace(/\D/g, "").slice(0, 6);
-    }
     setFields((f) => ({ ...f, [name]: value }));
 
     // Live email-availability check (check_email_availability endpoint).
@@ -109,15 +101,38 @@ function StudentFormPage({ edit = false }) {
     () =>
       edit ? studentAPI.update(studentId, fields) : studentAPI.create(fields),
     {
-      onSuccess: () => {
+      onSuccess: (result) => {
         addMessage(
           edit ? "Successfully Updated" : "Successfully Added",
           "success"
         );
+        // The server reports side effects the admin did not ask for here —
+        // a cascade promotion, or classmates renumbered because this student
+        // slotted into the middle of the batch alphabetically.
+        if (result?.detail) addMessage(result.detail, "info");
         navigate("/student/manage/");
       },
     }
   );
+
+  // Roll numbers read YY-SS-NN: intake year, the slot belonging to this
+  // course+shift pair, then the student's alphabetical position within it. The
+  // first four digits are knowable as soon as session, course and shift are
+  // picked, so show them rather than leaving the admin to wonder what the
+  // disabled field will fill with.
+  const rollNumberHelp = (() => {
+    const session = sessions.find((s) => String(s.id) === String(fields.session));
+    const course = courses.find((c) => String(c.id) === String(fields.course));
+    if (!session?.start_year || !course?.code) {
+      return "Assigned from the session, course, shift and alphabetical order.";
+    }
+    const slot = (course.code - 1) * 2 + (fields.shift === "day" ? 2 : 1);
+    const prefix = `${String(session.start_year).slice(2, 4)}${String(slot).padStart(2, "0")}`;
+    const shiftLabel = fields.shift === "day" ? "day" : "morning";
+    return `${prefix}NN — ${prefix} for ${course.abbreviation || course.name} ${String(
+      session.start_year
+    ).slice(0, 4)} ${shiftLabel}, then the alphabetical position within that shift.`;
+  })();
 
   const emailNote =
     emailStatus === "taken" ? (
@@ -194,6 +209,8 @@ function StudentFormPage({ edit = false }) {
 
       <SectionHeading icon="graduation-cap" title="Academic Details" />
       <Row>
+        {/* Both numbers are derived from the session and course below and
+            issued by the server, so they are shown but never edited here. */}
         <TextField
           col="col-md-4"
           label="Registration Number"
@@ -201,11 +218,13 @@ function StudentFormPage({ edit = false }) {
           icon="id-card"
           value={fields.registration_number}
           onChange={setField}
-          error={errors.registration_number}
-          inputMode="numeric"
-          placeholder="XXXX-XXXX-XXXX"
-          maxLength={14}
-          required
+          placeholder="Assigned on save"
+          help={
+            edit
+              ? "Set from the session; changing the session reissues it."
+              : "Assigned automatically from the session."
+          }
+          disabled
         />
         <TextField
           col="col-md-4"
@@ -214,11 +233,9 @@ function StudentFormPage({ edit = false }) {
           icon="hashtag"
           value={fields.roll_number}
           onChange={setField}
-          error={errors.roll_number}
-          inputMode="numeric"
-          placeholder="6-digit roll number"
-          maxLength={6}
-          required
+          placeholder="Assigned on save"
+          help={rollNumberHelp}
+          disabled
         />
         <TextField
           col="col-md-4"

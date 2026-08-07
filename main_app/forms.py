@@ -94,12 +94,9 @@ class StudentForm(CustomUserForm):
     allowed_email_domains = settings.STUDENT_ALLOWED_EMAIL_DOMAINS
     password_required_on_insert = False
 
-    registration_number = forms.CharField(
-        required=True, max_length=14, label='Registration Number',
-        validators=[RegexValidator(r'^\d{4}-\d{4}-\d{4}$', 'Registration number must be 12 digits (formatted as XXXX-XXXX-XXXX)')])
-    roll_number = forms.CharField(
-        required=True, max_length=6, label='Roll Number',
-        validators=[RegexValidator(r'^\d{6}$', 'Roll number must be exactly 6 digits')])
+    # registration_number and roll_number are deliberately absent: both are
+    # issued by main_app.idgen from the student's session and course, so
+    # anything posted under those names is ignored rather than trusted.
     address_line1 = forms.CharField(required=True, label='Address Line 1')
     address_line2 = forms.CharField(required=False, label='Address Line 2')
     city = forms.CharField(required=False, label='City')
@@ -138,7 +135,7 @@ class StudentForm(CustomUserForm):
     class Meta(CustomUserForm.Meta):
         model = Student
         fields = CustomUserForm.Meta.fields + \
-            ['registration_number', 'roll_number', 'course', 'session', 'shift', 'current_semester',
+            ['course', 'session', 'shift', 'current_semester',
              'parent_full_name', 'parent_phone_number', 'parent_relationship']
 
 
@@ -155,9 +152,8 @@ class StaffForm(CustomUserForm):
     allowed_email_domains = settings.STAFF_ALLOWED_EMAIL_DOMAINS
     password_required_on_insert = False
 
-    staff_id = forms.CharField(
-        required=True, max_length=6,
-        validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])
+    # staff_id is deliberately absent — main_app.idgen issues it on creation
+    # and it never changes afterwards, so a posted value is ignored.
     address_line1 = forms.CharField(required=True, label='Address Line 1')
     address_line2 = forms.CharField(required=False, label='Address Line 2')
     city = forms.CharField(required=False, label='City')
@@ -193,16 +189,20 @@ class StaffForm(CustomUserForm):
     class Meta(CustomUserForm.Meta):
         model = Staff
         fields = CustomUserForm.Meta.fields + \
-            ['staff_id', 'phone_number', 'date_of_birth',
-             'teaches_morning', 'teaches_day']
+            ['phone_number', 'date_of_birth', 'teaches_morning', 'teaches_day']
 
 
 class CourseForm(FormSettings):
     def __init__(self, *args, **kwargs):
         super(CourseForm, self).__init__(*args, **kwargs)
+        # Left blank on a new course, Course.save() picks the next free code.
+        self.fields['code'].required = False
+        self.fields['code'].help_text = (
+            "Digits 3-4 of every roll number issued in this course. Leave "
+            "blank to have the next free code assigned automatically.")
 
     class Meta:
-        fields = ['name', 'abbreviation', 'semesters']
+        fields = ['name', 'abbreviation', 'code', 'semesters']
         model = Course
 
 

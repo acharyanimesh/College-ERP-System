@@ -47,6 +47,13 @@ const studentAPI = {
     });
   },
 
+  /** Freeze alphabetical roll-number renumbering for a semester. One-way, and
+   *  the admin's own password confirms it. */
+  lockRollNumbers(courseId, semester, password) {
+    return axiosClient.post(
+      `/courses/${courseId}/semesters/${semester}/roll-lock/`, { password });
+  },
+
   /* --- Manage Students drill-down (course → semester → shift) --- */
 
   /** Courses with active-student counts (manage_student). */

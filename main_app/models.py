@@ -1,6 +1,7 @@
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import UserManager
-from django.core.validators import RegexValidator
+from django.core.validators import (
+    MaxValueValidator, MinValueValidator, RegexValidator)
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.db import models
@@ -12,6 +13,30 @@ from datetime import datetime,timedelta
 # Every course runs in both a Morning and a Day shift. A student belongs to one
 # shift; attendance is recorded per shift by the assigned teacher.
 SHIFT_CHOICES = (("morning", "Morning Shift"), ("day", "Day Shift"))
+
+# Digits 3-4 of a roll number are a slot: one two-digit number per
+# (course, shift) pair, allocated in course order — course 1 takes 01 morning
+# and 02 day, course 2 takes 03 and 04, and so on. Spending both digits on the
+# pair rather than one on the course and one on the shift is what lets the
+# college pass ten courses without the scheme running out of room.
+SHIFT_SLOT_OFFSET = {"morning": 0, "day": 1}
+# 99 slots, two per course.
+MAX_COURSE_CODE = 49
+
+
+def roll_slot(course_code, shift):
+    """The two-digit slot for a (course, shift), or None if either is unusable."""
+    offset = SHIFT_SLOT_OFFSET.get(shift)
+    if not course_code or offset is None:
+        return None
+    return "%02d" % ((course_code - 1) * 2 + 1 + offset)
+
+# Registration numbers read YYYY-01-BB-NNNN — intake year, a constant
+# institution code, the session's college-wide batch code, then a running
+# number unique within that batch. Built by main_app.idgen.
+REGISTRATION_NUMBER_RE = r'^\d{4}-\d{2}-\d{2}-\d{4}$'
+REGISTRATION_NUMBER_HELP = (
+    'Registration number must be 12 digits formatted as YYYY-XX-XX-XXXX')
 
 
 class CustomUserManager(UserManager):
@@ -39,9 +64,22 @@ class CustomUserManager(UserManager):
 class Session(models.Model):
     start_year = models.DateField()
     end_year = models.DateField()
+    # Third group of a student's registration number (YYYY-01-BB-NNNN). Counts
+    # intakes college-wide: the first session ever created is 01, the next 02,
+    # and so on. Assigned once on creation and never reshuffled afterwards —
+    # backfilling a session with an earlier start_year must not rewrite the
+    # registration numbers already issued under the existing ones.
+    batch_code = models.PositiveSmallIntegerField(null=True, blank=True, unique=True)
 
     def __str__(self):
         return "From " + str(self.start_year) + " to " + str(self.end_year)
+
+    def save(self, *args, **kwargs):
+        if self.batch_code is None:
+            highest = Session.objects.exclude(pk=self.pk).aggregate(
+                models.Max('batch_code'))['batch_code__max']
+            self.batch_code = (highest or 0) + 1
+        super().save(*args, **kwargs)
 
 
 class CustomUser(AbstractUser):
@@ -100,12 +138,40 @@ class Course(models.Model):
     # Short form (e.g. "BE-IT") shown in tables/lists across the app; falls back
     # to the full name when not set.
     abbreviation = models.CharField(max_length=30, blank=True, default="")
+    # This course's position in the roll-number slot table: course 1 owns
+    # slots 01 (morning) and 02 (day), course 2 owns 03 and 04, and so on — so
+    # a 2022 BE-IT morning student reads 22-01-NN. Auto-assigned on creation
+    # but editable; changing it does NOT rewrite roll numbers already issued.
+    code = models.PositiveSmallIntegerField(
+        null=True, blank=True, unique=True, verbose_name='Course Code',
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_COURSE_CODE)],
+        help_text="Position in the roll-number slot table (1-%d)." % MAX_COURSE_CODE)
     semesters = models.PositiveSmallIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            used = set(Course.objects.exclude(pk=self.pk).exclude(
+                code__isnull=True).values_list('code', flat=True))
+            for candidate in range(1, MAX_COURSE_CODE + 1):
+                if candidate not in used:
+                    self.code = candidate
+                    break
+            else:
+                raise ValueError(
+                    "All %d roll-number slots are in use — no course code is "
+                    "free." % MAX_COURSE_CODE)
+        super().save(*args, **kwargs)
+
+    @property
+    def roll_slots(self):
+        """{'morning': '01', 'day': '02'} — this course's roll-number slots."""
+        return {shift: roll_slot(self.code, shift)
+                for shift in SHIFT_SLOT_OFFSET}
 
     @property
     def short_name(self):
@@ -129,9 +195,11 @@ class Book(models.Model):
 
 class Student(models.Model):
     admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    # Both are issued by main_app.idgen when the student is created — never
+    # typed in by the admin. See that module for the layout of each.
     registration_number = models.CharField(
-        max_length=14, null=True, blank=True, unique=True,
-        validators=[RegexValidator(r'^\d{4}-\d{4}-\d{4}$', 'Registration number must be 12 digits (formatted as XXXX-XXXX-XXXX)')])
+        max_length=15, null=True, blank=True, unique=True,
+        validators=[RegexValidator(REGISTRATION_NUMBER_RE, REGISTRATION_NUMBER_HELP)])
     roll_number = models.CharField(
         max_length=6, null=True, blank=True,
         validators=[RegexValidator(r'^\d{6}$', 'Roll number must be exactly 6 digits')])
@@ -154,6 +222,56 @@ class Student(models.Model):
     def __str__(self):
         return self.admin.last_name + ", " + self.admin.first_name
 
+
+class IssuedSequence(models.Model):
+    """High-water mark for a family of serial numbers, e.g. staff IDs issued in
+    2026 or registration numbers in the 2022 batch.
+
+    Reading "highest number currently in the table, plus one" would quietly
+    recycle a number as soon as its owner is deleted, handing a departed
+    student's registration number to the next arrival. This table remembers
+    what has been handed out regardless of who is still on the roll, so a
+    deletion leaves a permanent gap instead.
+
+    Roll numbers deliberately do NOT use this — they are positional and are
+    meant to close up (see RollNumberBatch).
+    """
+    key = models.CharField(max_length=40, unique=True)
+    last_value = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return "%s → %d" % (self.key, self.last_value)
+
+
+class RollNumberBatch(models.Model):
+    """Roll-number state for one intake — a (session, course) cohort.
+
+    Roll numbers end in the student's alphabetical position within their
+    cohort, which only stays true if adding a student renumbers everyone who
+    sorts after them. That is fine while the intake is still being filled, and
+    unacceptable once the cohort has results on record under those numbers — so
+    the cohort renumbers freely until it is locked, and afterwards late arrivals
+    are simply appended at the end.
+
+    The lock is set when the cohort leaves Semester 1 (see
+    api/students._cascade_promote_course), or lazily by idgen the first time it
+    notices a cohort that has already moved up.
+    """
+    session = models.ForeignKey(Session, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    locked = models.BooleanField(default=False)
+    locked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('session', 'course')
+        verbose_name_plural = 'Roll number batches'
+
+    def __str__(self):
+        return "%s — %s (%s)" % (
+            self.course.short_name if self.course else '?', self.session,
+            'locked' if self.locked else 'open')
+
+
 class Library(models.Model):
     student = models.ForeignKey(Student,  on_delete=models.CASCADE, null=True, blank=False)
     book = models.ForeignKey(Book,  on_delete=models.CASCADE, null=True, blank=False)
@@ -171,6 +289,8 @@ class IssuedBook(models.Model):
 
 
 class Staff(models.Model):
+    # Issued by main_app.idgen on creation (YYNNNN — joining year plus a
+    # per-year serial); never typed in by the admin, never reused.
     staff_id = models.CharField(
         max_length=6, null=True, blank=True, unique=True,
         validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])

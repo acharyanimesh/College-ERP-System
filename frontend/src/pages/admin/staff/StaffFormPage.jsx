@@ -75,9 +75,6 @@ function StaffFormPage({ edit = false }) {
   }, [edit, staffId, addMessage]);
 
   const setField = (name, value) => {
-    if (name === "staff_id") {
-      value = value.replace(/\D/g, "").slice(0, 6);
-    }
     setFields((f) => ({ ...f, [name]: value }));
     if (name === "email") {
       setEmailStatus(null);
@@ -179,6 +176,7 @@ function StaffFormPage({ edit = false }) {
 
       <SectionHeading icon="briefcase" title="Employment Details" />
       <Row>
+        {/* Issued by the server on creation and fixed from then on. */}
         <TextField
           col="col-md-4"
           label="Staff id"
@@ -186,11 +184,13 @@ function StaffFormPage({ edit = false }) {
           icon="id-card"
           value={fields.staff_id}
           onChange={setField}
-          error={errors.staff_id}
-          inputMode="numeric"
-          placeholder="6-digit ID"
-          maxLength={6}
-          required
+          placeholder="Assigned on save"
+          help={
+            edit
+              ? "Issued when this account was created; it does not change."
+              : "Assigned automatically — joining year plus a serial, e.g. 260001."
+          }
+          disabled
         />
       </Row>
       <div className="form-group">

@@ -6,8 +6,11 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from django.db import transaction
+
 from ..emails import send_verification_email
 from ..forms import StaffForm
+from ..idgen import next_staff_id
 from ..models import CourseSubject, CustomUser, Staff
 from .permissions import IsAdmin
 from .serializers import form_errors, staff_detail, staff_row
@@ -38,8 +41,9 @@ def _apply_user_fields(user, form):
 
 
 def _apply_staff_fields(staff, form):
+    """Note staff_id is not touched here — it is issued once at creation and
+    is not editable afterwards, so an edit must leave it exactly as it is."""
     get = form.cleaned_data.get
-    staff.staff_id = get('staff_id')
     staff.teaches_morning = get('teaches_morning')
     staff.teaches_day = get('teaches_day')
 
@@ -61,15 +65,17 @@ def staff_list(request):
     get = form.cleaned_data.get
     passport_url = _save_profile_pic(request.FILES) or ''
     try:
-        user = CustomUser.objects.create_user(
-            email=get('email'), user_type=2, is_active=False,
-            first_name=get('first_name'), last_name=get('last_name'),
-            profile_pic=passport_url)
-        _apply_user_fields(user, form)
-        user.save()
-        staff = user.staff
-        _apply_staff_fields(staff, form)
-        staff.save()
+        with transaction.atomic():
+            user = CustomUser.objects.create_user(
+                email=get('email'), user_type=2, is_active=False,
+                first_name=get('first_name'), last_name=get('last_name'),
+                profile_pic=passport_url)
+            _apply_user_fields(user, form)
+            user.save()
+            staff = user.staff
+            _apply_staff_fields(staff, form)
+            staff.staff_id = next_staff_id()
+            staff.save()
     except Exception as e:
         return Response({'detail': "Could Not Add " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)

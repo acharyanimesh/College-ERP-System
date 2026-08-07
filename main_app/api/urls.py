@@ -58,6 +58,8 @@ urlpatterns = [
     path("courses/", academics.course_list),
     path("courses/<int:course_id>/", academics.course_item),
     path("courses/<int:course_id>/promote/", students.promote_class),
+    path("courses/<int:course_id>/semesters/<int:semester>/roll-lock/",
+         students.roll_number_lock),
     path("subjects/", academics.subject_list),
     path("subjects/manage/courses/<int:course_id>/semesters/",
          academics.subject_semesters),
