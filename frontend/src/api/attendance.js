@@ -39,7 +39,7 @@ const attendanceAPI = {
     return axiosClient.put(`/attendance/${attendanceId}/`, payload);
   },
 
-  /** Student's own records for a subject + date range (student_view_attendance POST). */
+  /** Student's own records for a subject on one date: { subject, date }. */
   getMyRecords(params) {
     return axiosClient.get("/attendance/mine/", { params });
   },

@@ -4,32 +4,46 @@ import attendanceAPI from "../../api/attendance";
 import { ListCard } from "../../components/ListCard";
 import { usePageHeader } from "../../layouts/Layout";
 
-const DIV_STYLES = `
-.attendance_div_red{
-    padding: 10px;
-    background: #f44336;
-    border: 3px solid white;
-    text-align: center;
+const RESULT_STYLES = `
+.attendance-result{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     color: #fff;
-    border-radius: 30px;
-    box-shadow: 1px 1px 1px grey;
-    margin: 5px;
 }
-.attendance_div_green{
-    padding: 10px;
-    background: #4CAF50;
-    border: 3px solid white;
-    text-align: center;
-    color: #fff;
-    border-radius: 30px;
-    box-shadow: 1px 1px 1px grey;
-    margin: 5px;
+.attendance-result-present{ background: #4CAF50; }
+.attendance-result-absent{ background: #f44336; }
+.attendance-result-icon{
+    font-size: 30px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.attendance-result-status{
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 0;
+}
+.attendance-result-meta{
+    margin: 2px 0 0;
+    opacity: 0.9;
+    font-size: 0.9rem;
 }
 `;
 
+/** ISO (yyyy-mm-dd) date for the <input type="date"> max attribute. */
+function todayIso() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now - offset).toISOString().slice(0, 10);
+}
+
 /**
  * Student "View Attendance" (student_template/student_view_attendance.html):
- * subject + date range → per-date present/absent pills.
+ * subject + one specific date → whether they were marked present that day.
  */
 function StudentViewAttendance() {
   usePageHeader({
@@ -39,107 +53,115 @@ function StudentViewAttendance() {
 
   const [subjects, setSubjects] = useState([]);
   const [subject, setSubject] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [date, setDate] = useState("");
   const [records, setRecords] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Only this student's course subjects come back for the student role.
+    // `mine` returns only the subjects of the student's course at their
+    // current semester (see api/academics.subject_list).
     subjectAPI.getAll({ mine: 1 }).then(setSubjects).catch(() => {});
   }, []);
 
   const fetchAttendance = async () => {
-    if (!subject || !startDate || !endDate) {
-      window.alert("Please Select Subject and Date Range");
+    if (!subject || !date) {
+      setError("Please select a subject and a date.");
+      setRecords(null);
       return;
     }
     setRecords(null);
     setError("");
+    setLoading(true);
     try {
-      const data = await attendanceAPI.getMyRecords({
-        subject,
-        start_date: startDate,
-        end_date: endDate,
-      });
-      setRecords(data);
+      setRecords(await attendanceAPI.getMyRecords({ subject, date }));
     } catch {
       setError("Error While Fetching Records");
+    } finally {
+      setLoading(false);
     }
   };
 
+  const subjectName = subjects.find((s) => String(s.id) === String(subject))?.name;
+
   return (
     <ListCard dark title="View Attendance">
-      <style>{DIV_STYLES}</style>
-      <div className="form-group">
-        <label>Select Subject</label>
-        <select
-          id="subject"
-          className="form-control"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-        >
-          <option value="">----</option>
-          {subjects.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="row">
-        <div className="col-lg-6">
-          <div className="form-group">
-            <label>Start Date</label>
+      <style>{RESULT_STYLES}</style>
+      <div className="row g-3 align-items-end">
+        <div className="col-lg-5 col-md-6">
+          <div className="form-group mb-0">
+            <label htmlFor="subject">Select Subject</label>
+            <select
+              id="subject"
+              className="form-control"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+            >
+              <option value="">----</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="col-lg-4 col-md-6">
+          <div className="form-group mb-0">
+            <label htmlFor="attendance-date">Date</label>
             <input
+              id="attendance-date"
               type="date"
               className="form-control"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              value={date}
+              max={todayIso()}
+              onChange={(e) => setDate(e.target.value)}
             />
           </div>
         </div>
-        <div className="col-lg-6">
-          <div className="form-group">
-            <label>End Date</label>
-            <input
-              type="date"
-              className="form-control"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
+        <div className="col-lg-3 col-md-12">
+          <button
+            type="button"
+            className="btn btn-success w-100"
+            onClick={fetchAttendance}
+            disabled={loading}
+          >
+            {loading ? "Fetching..." : "Fetch Attendance"}
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn btn-success btn-block w-100"
-          onClick={fetchAttendance}
-        >
-          Fetch Attendance Data
-        </button>
       </div>
 
-      <div style={{ overflow: "auto", maxHeight: 400 }} className="mt-3">
-        <div className="row">
-          {error && <div className="col-md-12 alert alert-danger">{error}</div>}
-          {records && !records.length && (
-            <div className="col-md-12 alert alert-danger">
-              No Data For Specified Parameters
-            </div>
-          )}
-          {records?.map((r, i) => (
-            <div
-              key={i}
-              className={`col-lg-3 ${
-                r.status ? "attendance_div_green" : "attendance_div_red"
+      <div className="mt-4">
+        {error && <div className="alert alert-danger">{error}</div>}
+        {records && !records.length && (
+          <div className="alert alert-warning mb-0">
+            No attendance was recorded for {subjectName || "this subject"} on{" "}
+            {date}.
+          </div>
+        )}
+        {records?.map((r, i) => (
+          <div
+            key={i}
+            className={`attendance-result ${
+              r.status ? "attendance-result-present" : "attendance-result-absent"
+            } ${i ? "mt-3" : ""}`}
+          >
+            <i
+              className={`attendance-result-icon fas fa-${
+                r.status ? "check-circle" : "times-circle"
               }`}
-            >
-              <b>{r.date}</b>
-              <br />
-              {r.status ? "Present" : "Absent"}
+            ></i>
+            <div>
+              <p className="attendance-result-status">
+                {r.status ? (r.late ? "Present (Late)" : "Present") : "Absent"}
+              </p>
+              <p className="attendance-result-meta">
+                {subjectName ? `${subjectName} — ` : ""}
+                {r.date}
+              </p>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </ListCard>
   );

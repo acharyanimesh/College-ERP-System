@@ -1,7 +1,7 @@
 """Issuing of the three identifiers the admin never types in by hand:
-staff IDs, student roll numbers and student registration numbers.
+employee IDs, student roll numbers and student registration numbers.
 
-    Staff ID              YYNNNN            250001
+    Employee ID           YYNNNN            250001
                           |  |
                           |  +-- serial within that joining year, from 0001
                           +----- last two digits of the joining year
@@ -21,7 +21,11 @@ staff IDs, student roll numbers and student registration numbers.
                           |    +-------- constant institution code
                           +------------- session start year
 
-Staff IDs and registration numbers are drawn from IssuedSequence counters, so
+Employee IDs cover both staff-room roles: Staff.staff_id and
+Librarian.librarian_id come out of one per-year counter, so no two employees
+can end up carrying the same number.
+
+Employee IDs and registration numbers are drawn from IssuedSequence counters, so
 they are never reused after a deletion — a gap in the sequence is preferable to
 handing a departed student's number to somebody else. Callers run inside the
 transaction the API views already open, so an allocation that ends in a failed
@@ -89,20 +93,31 @@ def _sort_key(student):
 
 
 # --------------------------------------------------------------------------
-# Staff IDs
+# Employee IDs (staff + librarians)
 # --------------------------------------------------------------------------
 
-def next_staff_id(joining_year=None):
-    """Allocate the next free staff ID for `joining_year` (default: today)."""
-    from .models import Staff
+def next_employee_id(joining_year=None):
+    """Allocate the next free employee ID for `joining_year` (default: today).
+
+    One counter serves both staff-room roles, so a staff member and a
+    librarian hired in the same year never share a number.
+    """
+    from .models import Librarian, Staff
 
     year = joining_year or date.today().year
     prefix = "%02d" % (year % 100)
-    highest = _highest(
-        Staff.objects.filter(staff_id__startswith=prefix), 'staff_id')
-    serial = _claim_serial("staff:%d" % year, int(highest[2:]) if highest else 0)
+    # Highest number visible in either table — only relevant for rows issued
+    # before the counter existed (see _claim_serial).
+    in_use = max(
+        int(highest[2:]) if highest else 0
+        for highest in (
+            _highest(Staff.objects.filter(staff_id__startswith=prefix), 'staff_id'),
+            _highest(Librarian.objects.filter(librarian_id__startswith=prefix),
+                     'librarian_id'),
+        ))
+    serial = _claim_serial("staff:%d" % year, in_use)
     if serial > 9999:
-        raise ValueError("All 9999 staff IDs for %d have been issued." % year)
+        raise ValueError("All 9999 employee IDs for %d have been issued." % year)
     return "%s%04d" % (prefix, serial)
 
 

@@ -27,6 +27,11 @@ const dashboardAPI = {
   studentHome() {
     return axiosClient.get("/dashboard/student/");
   },
+
+  /** Librarian dashboard: catalogue + circulation overview. */
+  librarianHome() {
+    return axiosClient.get("/dashboard/librarian/");
+  },
 };
 
 export default dashboardAPI;

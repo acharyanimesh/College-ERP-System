@@ -200,8 +200,12 @@ export function FileField({ label, name, onChange, col, error, ...rest }) {
  * photo already on file, from the API) until a new `file` is chosen, then
  * previews that instead. Used by Add/Edit Student and Add/Edit Staff in
  * place of a bare <FileField>, which just showed "No file chosen".
+ *
+ * `col` drops it into a grid column alongside other fields; `stacked` turns
+ * it into a centred photo panel (View/Edit Profile) rather than a preview
+ * with the button beside it.
  */
-export function AvatarField({ label = "Profile photo", name, file, existingUrl, onChange, error }) {
+export function AvatarField({ label = "Profile photo", name, file, existingUrl, onChange, error, col, stacked = false }) {
   const [previewUrl, setPreviewUrl] = useState(null);
 
   useEffect(() => {
@@ -217,9 +221,9 @@ export function AvatarField({ label = "Profile photo", name, file, existingUrl, 
   const shownUrl = previewUrl || existingUrl;
 
   return (
-    <div className="form-group">
+    <div className={`form-group ${col || ""}`}>
       <label>{label}:</label>
-      <div className="avatar-upload">
+      <div className={`avatar-upload ${stacked ? "avatar-upload-stacked" : ""}`}>
         <div className="avatar-upload-preview">
           {shownUrl ? (
             <img src={shownUrl} alt="" />

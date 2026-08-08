@@ -1,6 +1,5 @@
 from datetime import date as date_cls
 
-from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
@@ -16,6 +15,7 @@ from ..idgen import (
     assign_student_numbers, batch_lock_state, lock_batches_for_course,
     resequence_cohort)
 from ..models import SHIFT_CHOICES, Course, CustomUser, Session, Student
+from .people import apply_user_fields, save_profile_pic
 from .permissions import IsAdmin
 from .serializers import course_dict, form_errors, student_detail, student_row
 
@@ -47,32 +47,6 @@ def _cascade_promote_course(course, from_semester):
         current_semester__gte=from_semester, current_semester__lt=final
     ).update(current_semester=F('current_semester') + 1)
     return (promoted, graduated)
-
-
-def _save_profile_pic(files):
-    passport = files.get('profile_pic')
-    if not passport:
-        return None
-    fs = FileSystemStorage()
-    filename = fs.save(passport.name, passport)
-    return fs.url(filename)
-
-
-def _apply_user_fields(user, form):
-    """Copy the shared CustomUser fields out of a valid StudentForm."""
-    get = form.cleaned_data.get
-    user.first_name = get('first_name')
-    user.middle_name = get('middle_name')
-    user.last_name = get('last_name')
-    user.gender = get('gender')
-    user.address_line1 = get('address_line1')
-    user.address_line2 = get('address_line2')
-    user.city = get('city')
-    user.province = get('province')
-    user.address = ", ".join(filter(None, [
-        get('address_line1'), get('address_line2'), get('city'), get('province')]))
-    user.phone_number = get('phone_number')
-    user.date_of_birth = get('date_of_birth')
 
 
 @api_view(['GET', 'POST'])
@@ -112,7 +86,7 @@ def student_list(request):
                 % (session, course.short_name, cohort_sem, cohort_sem)},
                 status=status.HTTP_400_BAD_REQUEST)
 
-    passport_url = _save_profile_pic(request.FILES) or ''
+    passport_url = save_profile_pic(request.FILES) or ''
     try:
         promo_msg = None
         with transaction.atomic():
@@ -138,7 +112,7 @@ def student_list(request):
                 email=get('email'), user_type=3, is_active=False,
                 first_name=get('first_name'), last_name=get('last_name'),
                 profile_pic=passport_url)
-            _apply_user_fields(user, form)
+            apply_user_fields(user, form)
             user.save()
             student = user.student
             student.session = session
@@ -208,10 +182,10 @@ def student_item(request, student_id):
         password = get('password') or None
         if password is not None:
             user.set_password(password)
-        passport_url = _save_profile_pic(request.FILES)
+        passport_url = save_profile_pic(request.FILES)
         if passport_url is not None:
             user.profile_pic = passport_url
-        _apply_user_fields(user, form)
+        apply_user_fields(user, form)
         student.session = get('session')
         student.course = get('course')
         student.shift = get('shift')

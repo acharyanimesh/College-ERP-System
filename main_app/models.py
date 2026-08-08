@@ -83,7 +83,7 @@ class Session(models.Model):
 
 
 class CustomUser(AbstractUser):
-    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"))
+    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"), (4, "Librarian"))
     GENDER = [("M", "Male"), ("F", "Female")]
     
     
@@ -186,11 +186,31 @@ class Course(models.Model):
 class Book(models.Model):
     name = models.CharField(max_length=200)
     author = models.CharField(max_length=200)
-    isbn = models.PositiveIntegerField()
+    # Text, not a number: ISBNs are identifiers rather than quantities, and an
+    # integer column silently eats the leading zeros some of them carry.
+    isbn = models.CharField(max_length=13)
     category = models.CharField(max_length=50)
+    # How many physical copies the library holds of this title. Approving a
+    # borrow request is only meaningful against a count, so a catalogue row
+    # carries one even when the library only owns a single copy.
+    total_copies = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     def __str__(self):
         return str(self.name) + " ["+str(self.isbn)+']'
+
+    @property
+    def copies_out(self):
+        """Copies not on the shelf. An approved-but-uncollected request holds
+        one just as firmly as a collected loan does — otherwise the librarian
+        could promise the same copy to five students."""
+        return self.requests.filter(
+            status__in=BookRequest.HOLDING_STATUSES).count()
+
+    @property
+    def available_copies(self):
+        return max(self.total_copies - self.copies_out, 0)
 
 
 class Student(models.Model):
@@ -272,25 +292,11 @@ class RollNumberBatch(models.Model):
             'locked' if self.locked else 'open')
 
 
-class Library(models.Model):
-    student = models.ForeignKey(Student,  on_delete=models.CASCADE, null=True, blank=False)
-    book = models.ForeignKey(Book,  on_delete=models.CASCADE, null=True, blank=False)
-    def __str__(self):
-        return str(self.student)
-
-def expiry():
-    return datetime.today() + timedelta(days=14)
-class IssuedBook(models.Model):
-    student_id = models.CharField(max_length=100, blank=True) 
-    isbn = models.CharField(max_length=13)
-    issued_date = models.DateField(auto_now=True)
-    expiry_date = models.DateField(default=expiry)
-
-
-
 class Staff(models.Model):
     # Issued by main_app.idgen on creation (YYNNNN — joining year plus a
-    # per-year serial); never typed in by the admin, never reused.
+    # per-year serial); never typed in by the admin, never reused. Staff and
+    # Librarian draw on one counter, so an employee ID identifies exactly one
+    # person regardless of which of the two roles they hold.
     staff_id = models.CharField(
         max_length=6, null=True, blank=True, unique=True,
         validators=[RegexValidator(r'^\d{6}$', 'Staff ID must be exactly 6 digits')])
@@ -326,6 +332,266 @@ class Staff(models.Model):
     def shifts_display(self):
         labels = dict(SHIFT_CHOICES)
         return ", ".join(labels[s] for s in self.shifts) or "—"
+
+
+class Librarian(models.Model):
+    """The college librarian: runs the book catalogue and decides on the
+    students' borrow requests. Not a teacher — a librarian has no shifts,
+    subjects or classes, which is why this is its own role rather than a flag
+    on Staff."""
+    # Drawn from the same per-year counter as Staff.staff_id — see idgen.
+    librarian_id = models.CharField(
+        max_length=6, null=True, blank=True, unique=True,
+        validators=[RegexValidator(r'^\d{6}$', 'Librarian ID must be exactly 6 digits')])
+    admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.admin.first_name + " " + self.admin.last_name
+
+
+# How long a borrowed book may be kept, and what a late day costs.
+LOAN_PERIOD_DAYS = 14
+FINE_PER_DAY = 10
+# An approved renewal pushes the due date out by this much. A loan may be
+# renewed once; after that the book has to come back and be requested afresh.
+RENEWAL_PERIOD_DAYS = 7
+# How many days before the due date the "return or renew" nudge goes out.
+DUE_SOON_REMINDER_DAYS = 3
+
+
+class BookRequest(models.Model):
+    """A student's request to borrow a book, and the loan it turns into.
+
+        PENDING ──approve──> APPROVED ──issue──> ISSUED ──return──> RETURNED
+           │                     │
+           ├──reject───> REJECTED┘   (also how an uncollected approval lapses)
+           └──cancel───> CANCELLED
+
+    Request and loan share one row on purpose: a student asking for a book,
+    being allowed to have it, and carrying it home are three points on one
+    story, and splitting them across tables would mean stitching that story
+    back together for every "where is my book?" screen.
+    """
+    PENDING = 'pending'
+    APPROVED = 'approved'
+    ISSUED = 'issued'
+    RETURNED = 'returned'
+    REJECTED = 'rejected'
+    CANCELLED = 'cancelled'
+    STATUS_CHOICES = (
+        (PENDING, 'Pending'),
+        (APPROVED, 'Ready for pickup'),
+        (ISSUED, 'Borrowed'),
+        (RETURNED, 'Returned'),
+        (REJECTED, 'Rejected'),
+        (CANCELLED, 'Cancelled'),
+    )
+    # A copy is off the shelf in these two states.
+    HOLDING_STATUSES = (APPROVED, ISSUED)
+    # These count against the student's borrowing limit, and are what makes a
+    # second request for the same book a duplicate.
+    OPEN_STATUSES = (PENDING, APPROVED, ISSUED)
+
+    # Renewal is a sub-state of one ISSUED loan rather than a status of its
+    # own: the loan carries on either way, only the due date may move. It runs
+    # NONE → REQUESTED → GRANTED/DECLINED and never resets, which is what
+    # enforces "a book cannot be renewed more than once" — a second extension
+    # means returning the book and requesting it again.
+    RENEWAL_NONE = 'none'
+    RENEWAL_REQUESTED = 'requested'
+    RENEWAL_GRANTED = 'granted'
+    RENEWAL_DECLINED = 'declined'
+    RENEWAL_CHOICES = (
+        (RENEWAL_NONE, 'Not requested'),
+        (RENEWAL_REQUESTED, 'Renewal requested'),
+        (RENEWAL_GRANTED, 'Renewed'),
+        (RENEWAL_DECLINED, 'Renewal declined'),
+    )
+
+    student = models.ForeignKey(
+        Student, on_delete=models.CASCADE, related_name='book_requests')
+    # PROTECT, not CASCADE: a title someone is currently holding must not be
+    # deleteable out from under the loan record.
+    book = models.ForeignKey(
+        Book, on_delete=models.PROTECT, related_name='requests')
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=PENDING, db_index=True)
+    student_note = models.TextField(blank=True, default="")
+    # Why it was rejected, or any remark the librarian left on the decision.
+    librarian_note = models.TextField(blank=True, default="")
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        Librarian, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='decisions')
+    # Set when the student actually collects the book — the loan clock starts
+    # at the desk, not at approval.
+    issued_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    returned_date = models.DateField(null=True, blank=True)
+
+    # --- Renewal of this loan (see RENEWAL_CHOICES above) ---
+    renewal_state = models.CharField(
+        max_length=10, choices=RENEWAL_CHOICES, default=RENEWAL_NONE)
+    renewal_requested_at = models.DateTimeField(null=True, blank=True)
+    renewal_reason = models.TextField(blank=True, default="")
+    renewal_decided_at = models.DateTimeField(null=True, blank=True)
+    renewal_decided_by = models.ForeignKey(
+        Librarian, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='renewal_decisions')
+    renewal_librarian_note = models.TextField(blank=True, default="")
+    # The due date as it stood before the extension, kept so the loan's own
+    # history still shows what the original deadline was.
+    due_date_before_renewal = models.DateField(null=True, blank=True)
+
+    # Guards the due-soon reminder against going out twice (the sweep is meant
+    # to be safe to run repeatedly, including by hand from the dashboard).
+    reminder_sent_on = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        constraints = [
+            # One live request per student per book, enforced by the database
+            # rather than by whichever view happens to remember to check.
+            # (OPEN_STATUSES spelled out: a nested Meta can't see the names
+            # defined in the class body around it.)
+            models.UniqueConstraint(
+                fields=['student', 'book'],
+                condition=Q(status__in=('pending', 'approved', 'issued')),
+                name='one_open_request_per_student_book'),
+        ]
+
+    def __str__(self):
+        return "%s → %s (%s)" % (self.student, self.book, self.status)
+
+    @property
+    def days_overdue(self):
+        if self.status != self.ISSUED or not self.due_date:
+            return 0
+        return max((datetime.today().date() - self.due_date).days, 0)
+
+    @property
+    def days_late(self):
+        """Days past the due date at the point the book actually came back;
+        for a loan still out, days late so far."""
+        if self.status == self.RETURNED and self.returned_date and self.due_date:
+            return max((self.returned_date - self.due_date).days, 0)
+        return self.days_overdue
+
+    @property
+    def fine(self):
+        """What the student owes today. Frozen once the book comes back —
+        a returned loan's fine is whatever it was on the day of return."""
+        return self.days_late * FINE_PER_DAY
+
+    @property
+    def fine_settled(self):
+        """True once the desk has taken the cash (or written the fine off).
+        Settlement is the existence of a LibraryFine row, never a flag that
+        could be flipped back."""
+        return self.fine_records.exists()
+
+    @property
+    def fine_outstanding(self):
+        """Still owed. A settled loan owes nothing even if the computed fine
+        would say otherwise — the receipt is what counts."""
+        return 0 if self.fine_settled else self.fine
+
+    @property
+    def can_request_renewal(self):
+        """One renewal per loan, and only while the book is still in time:
+        a loan already running late is a return, not an extension."""
+        return (self.status == self.ISSUED
+                and self.renewal_state == self.RENEWAL_NONE
+                and self.days_overdue == 0)
+
+
+class ImmutableRecord(models.Model):
+    """A row that can be written once and never altered again.
+
+    Django gives no built-in way to say "append only", so the two mutating
+    paths are closed off here: save() refuses a second write to an existing
+    row, and delete() refuses outright. This is enforcement, not convention —
+    a careless view, a shell one-liner and the Django admin all hit the same
+    wall.
+    """
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None and not self._state.adding:
+            raise ValueError(
+                "%s is an immutable record and cannot be modified."
+                % type(self).__name__)
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError(
+            "%s is an immutable record and cannot be deleted."
+            % type(self).__name__)
+
+
+class LibraryFine(ImmutableRecord):
+    """The receipt for a late-return fine, settled in cash at the desk.
+
+    Money changed hands in the real world, so this row is the record of that
+    and is append-only (see ImmutableRecord): a mistake is corrected by
+    issuing a second, offsetting record, never by editing or deleting this
+    one. Both portals read the same rows — the student sees their own
+    receipts, the librarian sees every receipt taken at the desk.
+
+    The librarian is stored twice on purpose. The FK is for querying; the
+    name is a snapshot, so who took the money survives that account later
+    being removed.
+    """
+    PAID = 'paid'
+    WAIVED = 'waived'
+    KIND_CHOICES = ((PAID, 'Paid in cash'), (WAIVED, 'Waived'))
+
+    # PROTECT throughout: nothing a receipt points at may be deleted out from
+    # under it, or the record stops explaining itself.
+    request = models.ForeignKey(
+        BookRequest, on_delete=models.PROTECT, related_name='fine_records')
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='library_fines')
+    receipt_no = models.CharField(max_length=20, unique=True)
+    kind = models.CharField(max_length=6, choices=KIND_CHOICES, default=PAID)
+    # In rupees. Whole numbers — the fine is a flat per-day rate.
+    amount = models.PositiveIntegerField()
+    days_late = models.PositiveSmallIntegerField(default=0)
+    rate_per_day = models.PositiveSmallIntegerField(default=FINE_PER_DAY)
+    collected_by = models.ForeignKey(
+        Librarian, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='fines_collected')
+    collected_by_name = models.CharField(max_length=150, blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            # One receipt per loan. A loan is fined once; anything else is a
+            # double charge, and the database is the right place to say so.
+            models.UniqueConstraint(
+                fields=['request'], name='one_fine_record_per_loan'),
+        ]
+
+    def __str__(self):
+        return "%s · %s · Rs. %d (%s)" % (
+            self.receipt_no, self.student, self.amount, self.kind)
+
+    @staticmethod
+    def next_receipt_no():
+        """LIB-FINE-000001, allocated on insert. Sequential rather than random
+        because a cash receipt gets read out loud and written in a register."""
+        last = LibraryFine.objects.order_by('-id').values_list(
+            'receipt_no', flat=True).first()
+        n = 0
+        if last and last.rsplit('-', 1)[-1].isdigit():
+            n = int(last.rsplit('-', 1)[-1])
+        return "LIB-FINE-%06d" % (n + 1)
 
 
 class Subject(models.Model):
@@ -499,6 +765,8 @@ def create_user_profile(sender, instance, created, **kwargs):
             Staff.objects.create(admin=instance)
         if user_type == '3':
             Student.objects.create(admin=instance)
+        if user_type == '4':
+            Librarian.objects.create(admin=instance)
 
 
 @receiver(post_save, sender=CustomUser)
@@ -510,5 +778,7 @@ def save_user_profile(sender, instance, **kwargs):
         instance.staff.save()
     if user_type == '3':
         instance.student.save()
+    if user_type == '4':
+        instance.librarian.save()
 
 # todos

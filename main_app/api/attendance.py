@@ -185,24 +185,25 @@ def attendance_update(request, attendance_id):
 @api_view(['GET'])
 @permission_classes([IsStudent])
 def my_records(request):
-    """Student's own records for a subject + date range
-    (student_views.student_view_attendance POST)."""
+    """Student's own records for a subject on one specific date.
+
+    Was a start/end range; students look up a single day ("was I marked
+    present last Tuesday?"), so the page now asks for one date only."""
     student = get_object_or_404(Student, admin=request.user)
     params = request.query_params
     subject = get_object_or_404(Subject, id=params.get('subject'))
     try:
-        start_date = datetime.strptime(params.get('start_date'), "%Y-%m-%d")
-        end_date = datetime.strptime(params.get('end_date'), "%Y-%m-%d")
+        day = datetime.strptime(params.get('date'), "%Y-%m-%d").date()
     except (TypeError, ValueError):
-        return Response({'detail': 'start_date and end_date are required.'},
+        return Response({'detail': 'A valid date is required.'},
                         status=status.HTTP_400_BAD_REQUEST)
-    attendance = Attendance.objects.filter(
-        date__range=(start_date, end_date), subject=subject)
+    attendance = Attendance.objects.filter(date=day, subject=subject)
     reports = AttendanceReport.objects.filter(
-        attendance__in=attendance, student=student)
+        attendance__in=attendance, student=student).select_related('attendance')
     return Response([{
         'date': str(r.attendance.date),
         'status': r.status,
+        'late': r.late,
     } for r in reports])
 
 

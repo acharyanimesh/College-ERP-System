@@ -2,7 +2,12 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { menuForUserType } from "./sidebarMenu";
 
-const ROLE_LABELS = { 1: "Administrator", 2: "Staff Member", 3: "Student" };
+const ROLE_LABELS = {
+  1: "Administrator",
+  2: "Staff Member",
+  3: "Student",
+  4: "Librarian",
+};
 
 /** Replicates the template's active rule: exact path match OR any extra substring. */
 function isActive(pathname, item) {

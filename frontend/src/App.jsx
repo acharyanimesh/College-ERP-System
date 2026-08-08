@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout, { usePageHeader } from "./layouts/Layout";
+import { homePath } from "./layouts/Navbar";
 import Login from "./pages/Login";
 import VerifyEmail from "./pages/VerifyEmail";
 import VerifyAdminEmail from "./pages/VerifyAdminEmail";
@@ -53,10 +54,19 @@ import StaffTakeAttendance from "./pages/staff/StaffTakeAttendance";
 import StaffUpdateAttendance from "./pages/staff/StaffUpdateAttendance";
 import StaffViewAttendance from "./pages/staff/StaffViewAttendance";
 import StaffManageResult from "./pages/staff/StaffManageResult";
-import AddBook from "./pages/staff/AddBook";
 import StudentViewAttendance from "./pages/student/StudentViewAttendance";
 import StudentViewResult from "./pages/student/StudentViewResult";
 import ViewBooks from "./pages/student/ViewBooks";
+import MyBorrowings from "./pages/student/MyBorrowings";
+import LibrarianDashboard from "./pages/librarian/LibrarianDashboard";
+import BorrowRequests from "./pages/librarian/BorrowRequests";
+import IssuedBooks from "./pages/librarian/IssuedBooks";
+import Fines from "./pages/librarian/Fines";
+import ManageBooks from "./pages/librarian/ManageBooks";
+import BookFormPage from "./pages/librarian/BookFormPage";
+import ManageLibrarian from "./pages/admin/librarian/ManageLibrarian";
+import LibrarianFormPage from "./pages/admin/librarian/LibrarianFormPage";
+import LibrarianDetails from "./pages/admin/librarian/LibrarianDetails";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -72,6 +82,21 @@ function PlaceholderPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Role gate for a single route. The API is the real authority — every
+ * endpoint checks the caller's role — but a page the current role can't use
+ * shouldn't render its empty tables and dead buttons either, so send them
+ * home instead.
+ */
+function RequireRole({ types, children }) {
+  const { user } = useAuth();
+  if (!user) return null;
+  if (!types.includes(String(user.user_type))) {
+    return <Navigate to={homePath(user.user_type)} replace />;
+  }
+  return children;
 }
 
 /**
@@ -184,12 +209,104 @@ function App() {
             <Route path="/staff/apply/leave/" element={<ApplyLeave role="staff" />} />
             <Route path="/staff/feedback/" element={<FeedbackPage role="staff" />} />
             <Route path="/staff/result/manage/" element={<StaffManageResult />} />
-            <Route path="/staff/addbook/" element={<AddBook />} />
             <Route
               path="/staff/view/notification/"
               element={<NotificationsPage role="staff" />}
             />
             <Route path="/staff/view/profile/" element={<ProfilePage />} />
+
+            {/* Librarians (admin management) */}
+            <Route
+              path="/librarian/add"
+              element={
+                <RequireRole types={["1"]}>
+                  <LibrarianFormPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/edit/:librarianId"
+              element={
+                <RequireRole types={["1"]}>
+                  <LibrarianFormPage edit />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/manage/"
+              element={
+                <RequireRole types={["1"]}>
+                  <ManageLibrarian />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/details/:librarianId"
+              element={
+                <RequireRole types={["1"]}>
+                  <LibrarianDetails />
+                </RequireRole>
+              }
+            />
+
+            {/* Librarian role pages */}
+            <Route
+              path="/librarian/home/"
+              element={
+                <RequireRole types={["4"]}>
+                  <LibrarianDashboard />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/requests/"
+              element={
+                <RequireRole types={["4"]}>
+                  <BorrowRequests />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/issued/"
+              element={
+                <RequireRole types={["4"]}>
+                  <IssuedBooks />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/fines/"
+              element={
+                <RequireRole types={["4"]}>
+                  <Fines />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/books/"
+              element={
+                <RequireRole types={["4"]}>
+                  <ManageBooks />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/books/add/"
+              element={
+                <RequireRole types={["4"]}>
+                  <BookFormPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/librarian/books/edit/:bookId"
+              element={
+                <RequireRole types={["4"]}>
+                  <BookFormPage edit />
+                </RequireRole>
+              }
+            />
+            <Route path="/librarian/view/profile/" element={<ProfilePage />} />
 
             {/* Student role pages */}
             <Route path="/student/view/attendance/" element={<StudentViewAttendance />} />
@@ -197,6 +314,7 @@ function App() {
             <Route path="/student/feedback/" element={<FeedbackPage role="student" />} />
             <Route path="/student/view/result/" element={<StudentViewResult />} />
             <Route path="/student/viewbooks/" element={<ViewBooks />} />
+            <Route path="/student/borrowings/" element={<MyBorrowings />} />
             <Route
               path="/student/view/notification/"
               element={<NotificationsPage role="student" />}

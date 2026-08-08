@@ -24,9 +24,9 @@ const QUICK_ACTIONS = [
     btn: "btn-warning",
   },
   {
-    text: "Add Books",
-    icon: "fas fa-book-open",
-    to: "/staff/addbook/",
+    text: "Feedback",
+    icon: "fas fa-comment-alt",
+    to: "/staff/feedback/",
     btn: "btn-secondary",
   },
 ];

@@ -3,7 +3,8 @@
 from django.urls import path
 
 from . import (academics, attendance, auth, books, dashboard, leave_feedback,
-               notifications, profile, results, staff, students)
+               librarians, library, notifications, profile, results, staff,
+               students)
 
 urlpatterns = [
     # Auth / session
@@ -29,6 +30,7 @@ urlpatterns = [
     path("dashboard/admin/", dashboard.admin_home),
     path("dashboard/staff/", dashboard.staff_home),
     path("dashboard/student/", dashboard.student_home),
+    path("dashboard/librarian/", dashboard.librarian_home),
 
     # Own profile
     path("profile/", profile.profile),
@@ -53,6 +55,12 @@ urlpatterns = [
     path("staff/<int:staff_id>/", staff.staff_item),
     path("staff/<int:staff_id>/subject-assignments/", staff.subject_assignments),
     path("staff/<int:staff_id>/resend-verification/", staff.resend_verification),
+
+    # Librarians (admin management)
+    path("librarians/", librarians.librarian_list),
+    path("librarians/<int:librarian_id>/", librarians.librarian_item),
+    path("librarians/<int:librarian_id>/resend-verification/",
+         librarians.resend_verification),
 
     # Academics
     path("courses/", academics.course_list),
@@ -109,8 +117,34 @@ urlpatterns = [
     path("notifications/student/send/", notifications.send_to_student),
     path("notifications/<str:role>/mine/", notifications.mine),
 
-    # Library
+    # Library — catalogue
     path("books/", books.book_list),
-    path("books/issue/", books.issue),
-    path("books/issued/", books.issued),
+    path("books/<int:book_id>/", books.book_item),
+
+    # Library — borrowing
+    path("library/requests/", library.request_list),
+    path("library/requests/mine/", library.my_requests),
+    path("library/requests/<int:request_id>/cancel/", library.cancel),
+    path("library/requests/<int:request_id>/approve/", library.approve),
+    path("library/requests/<int:request_id>/reject/", library.reject),
+    path("library/requests/<int:request_id>/issue/", library.issue),
+    path("library/requests/<int:request_id>/return/", library.mark_returned),
+    path("library/loans/", library.loans),
+
+    # Library — renewal of a loan (one per loan)
+    path("library/requests/<int:request_id>/renew/", library.request_renewal),
+    path("library/requests/<int:request_id>/renew/approve/",
+         library.approve_renewal),
+    path("library/requests/<int:request_id>/renew/reject/",
+         library.reject_renewal),
+
+    # Library — fines (cash at the desk; receipts are append-only)
+    path("library/fines/", library.fine_records),
+    path("library/fines/mine/", library.my_fines),
+    path("library/fines/unsettled/", library.unsettled_fines),
+    path("library/requests/<int:request_id>/fine/collect/", library.collect_fine),
+    path("library/requests/<int:request_id>/fine/waive/", library.waive_fine),
+
+    # Library — due-date reminders (same sweep as the scheduled command)
+    path("library/reminders/send/", library.send_reminders),
 ]

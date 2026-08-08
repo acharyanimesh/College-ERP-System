@@ -10,11 +10,14 @@ def _uidb64(user):
     return urlsafe_base64_encode(force_bytes(user.pk))
 
 
+ROLE_NAMES = {"2": "Staff", "3": "Student", "4": "Librarian"}
+
+
 def send_verification_email(user):
-    """Email a newly-created (inactive) Staff/Student account owner a link
-    to verify their address and set their own password. Raises on send
+    """Email a newly-created (inactive) Staff/Student/Librarian account owner
+    a link to verify their address and set their own password. Raises on send
     failure so the caller can decide how to surface that to the admin."""
-    role = "Staff" if str(user.user_type) == "2" else "Student"
+    role = ROLE_NAMES.get(str(user.user_type), "Student")
     token = email_verification_token.make_token(user)
     link = f"{settings.FRONTEND_URL}/verify-email/{_uidb64(user)}/{token}/"
     send_mail(
@@ -34,7 +37,7 @@ def send_verification_email(user):
 
 
 def send_email_change_verification(user):
-    """Email a Staff/Student's admin-approved new address (held in
+    """Email a Staff/Student/Librarian's admin-approved new address (held in
     `user.pending_email`) a link to confirm it. Only called once an admin
     has approved the change — see api/auth.py's approve_email_change.
     Raises on send failure so the caller can surface it."""

@@ -48,6 +48,8 @@ export const ADMIN_MENU = [
       { text: "Add Student", icon: "fas fa-user-graduate", to: "/student/add/" },
       { text: "Manage Students", icon: "fas fa-users", to: "/student/manage/", active: ["edit_student"] },
       { text: "Passed Out Students", icon: "fas fa-user-graduate", to: "/student/passed-out/", active: ["passed-out"] },
+      { text: "Add Librarian", icon: "fas fa-book-reader", to: "/librarian/add" },
+      { text: "Manage Librarians", icon: "fas fa-address-book", to: "/librarian/manage/", active: ["/librarian/edit/", "/librarian/details/"] },
     ],
   },
   {
@@ -107,10 +109,6 @@ export const STAFF_MENU = [
     ],
   },
   {
-    title: "Library & Resources",
-    items: [{ text: "Add Books", icon: "fas fa-book-open", to: "/staff/addbook/" }],
-  },
-  {
     title: "Communication",
     items: [
       { text: "Notifications", icon: "fas fa-bell", to: "/staff/view/notification/" },
@@ -137,7 +135,10 @@ export const STUDENT_MENU = [
   },
   {
     title: "Library & Resources",
-    items: [{ text: "Library Books", icon: "fas fa-book", to: "/student/viewbooks/" }],
+    items: [
+      { text: "Library Books", icon: "fas fa-book", to: "/student/viewbooks/" },
+      { text: "My Borrowings", icon: "fas fa-bookmark", to: "/student/borrowings/" },
+    ],
   },
   {
     title: "Communication",
@@ -149,9 +150,35 @@ export const STUDENT_MENU = [
   },
 ];
 
+export const LIBRARIAN_MENU = [
+  {
+    title: "Main",
+    items: [
+      { text: "Dashboard", icon: "fas fa-tachometer-alt", to: "/librarian/home/" },
+      { text: "Profile", icon: "fas fa-user-circle", to: "/librarian/view/profile/", navIcon: false },
+    ],
+  },
+  {
+    title: "Circulation",
+    items: [
+      { text: "Borrow Requests", icon: "fas fa-inbox", to: "/librarian/requests/" },
+      { text: "Issued Books", icon: "fas fa-hand-holding", to: "/librarian/issued/" },
+      { text: "Fines", icon: "fas fa-money-bill-wave", to: "/librarian/fines/" },
+    ],
+  },
+  {
+    title: "Catalogue",
+    items: [
+      { text: "Add Book", icon: "fas fa-book-medical", to: "/librarian/books/add/" },
+      { text: "Manage Books", icon: "fas fa-book-open", to: "/librarian/books/", active: ["/librarian/books/edit/"] },
+    ],
+  },
+];
+
 export function menuForUserType(userType) {
   const t = String(userType);
   if (t === "1") return ADMIN_MENU;
   if (t === "2") return STAFF_MENU;
+  if (t === "4") return LIBRARIAN_MENU;
   return STUDENT_MENU;
 }

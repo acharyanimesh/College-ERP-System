@@ -74,9 +74,16 @@ def subject_list(request):
     if request.method == 'GET':
         subjects = Subject.objects.all()
         if request.query_params.get('mine'):
-            # Student role: only the subjects of the student's own course.
+            # Student role: the subjects the student is being taught right
+            # now — their own course, at their current semester. Both
+            # conditions go in one filter() so they must be satisfied by the
+            # same CourseSubject row; chained filters would also match a
+            # subject that sits in another course at that semester.
             student = getattr(request.user, 'student', None)
-            subjects = subjects.filter(courses=student.course) if student else Subject.objects.none()
+            subjects = subjects.filter(
+                coursesubject__course=student.course,
+                coursesubject__semester=student.current_semester,
+            ) if student else Subject.objects.none()
         course = request.query_params.get('course')
         semester = request.query_params.get('semester')
         if course:

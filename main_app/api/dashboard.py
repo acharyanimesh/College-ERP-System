@@ -6,11 +6,12 @@ from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from ..models import (Attendance, AttendanceReport, Course, CourseSubject,
-                      LeaveReportStaff, LeaveReportStudent, NotificationStaff,
-                      NotificationStudent, Session, Staff, Student, Subject)
-from .permissions import IsAdmin, IsStaff, IsStudent
-from .serializers import course_dict
+from ..models import (Attendance, AttendanceReport, Book, BookRequest, Course,
+                      CourseSubject, LeaveReportStaff, LeaveReportStudent,
+                      NotificationStaff, NotificationStudent, Session, Staff,
+                      Student, Subject)
+from .permissions import IsAdmin, IsLibrarian, IsStaff, IsStudent
+from .serializers import book_request_dict, course_dict
 
 
 def _attention_alerts(today):
@@ -319,10 +320,63 @@ def staff_home(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsLibrarian])
+def librarian_home(request):
+    """Circulation desk at a glance: what needs deciding, what is out, what is
+    late, plus the shape of the catalogue behind it."""
+    books = list(Book.objects.all())
+    total_copies = sum(b.total_copies for b in books)
+
+    by_category = {}
+    for book in books:
+        label = (book.category or '').strip() or 'Uncategorised'
+        by_category[label] = by_category.get(label, 0) + 1
+
+    issued = BookRequest.objects.filter(
+        status=BookRequest.ISSUED).select_related('book', 'student__admin')
+    overdue = [r for r in issued if r.days_overdue]
+
+    pending = BookRequest.objects.filter(
+        status=BookRequest.PENDING).select_related(
+        'book', 'student__admin', 'student__course')
+
+    return Response({
+        'total_titles': len(books),
+        'total_copies': total_copies,
+        'copies_out': sum(b.copies_out for b in books),
+        'pending_requests': pending.count(),
+        'awaiting_pickup': BookRequest.objects.filter(
+            status=BookRequest.APPROVED).count(),
+        'books_on_loan': issued.count(),
+        'overdue_count': len(overdue),
+        'fines_outstanding': sum(r.fine for r in overdue),
+        'category_breakdown': sorted(
+            ({'label': k, 'count': v} for k, v in by_category.items()),
+            key=lambda c: -c['count']),
+        'recent_requests': [
+            book_request_dict(r, for_librarian=True) for r in pending[:8]],
+        'overdue_loans': [
+            book_request_dict(r, for_librarian=True) for r in sorted(
+                overdue, key=lambda r: -r.days_overdue)[:8]],
+    })
+
+
+@api_view(['GET'])
 @permission_classes([IsStudent])
 def student_home(request):
+    """Everything the student dashboard shows is scoped to the semester the
+    student is currently enrolled in — a 6th-semester student has no use for
+    the subjects and attendance bars of the five semesters behind them."""
     student = get_object_or_404(Student, admin=request.user)
-    total_subject = Subject.objects.filter(courses=student.course).count()
+    current_semester = student.current_semester
+    # Subjects of the student's course *at their current semester*, with the
+    # teacher assigned for their shift — one pass, reused for both the
+    # subject-wise attendance chart and the "My Subjects" table.
+    semester_subjects = CourseSubject.objects.filter(
+        course=student.course, semester=current_semester).select_related(
+        'subject', 'morning_staff__admin', 'day_staff__admin').order_by(
+        'subject__name')
+
     total_attendance = AttendanceReport.objects.filter(student=student).count()
     total_present = AttendanceReport.objects.filter(
         student=student, status=True).count()
@@ -331,30 +385,30 @@ def student_home(request):
     else:
         percent_present = math.floor((total_present / total_attendance) * 100)
         percent_absent = math.ceil(100 - percent_present)
+
     subject_name = []
     data_present = []
     data_absent = []
-    for subject in Subject.objects.filter(courses=student.course):
-        attendance = Attendance.objects.filter(subject=subject)
+    course_subjects = []
+    for cs in semester_subjects:
+        attendance = Attendance.objects.filter(subject=cs.subject)
         data_present.append(AttendanceReport.objects.filter(
             attendance__in=attendance, status=True, student=student).count())
         data_absent.append(AttendanceReport.objects.filter(
             attendance__in=attendance, status=False, student=student).count())
-        subject_name.append(subject.name)
-    course_subjects = []
-    for cs in CourseSubject.objects.filter(course=student.course).select_related(
-            'subject', 'morning_staff__admin', 'day_staff__admin').order_by(
-            'semester', 'subject__name'):
+        subject_name.append(cs.subject.name)
         teacher = cs.staff_for_shift(student.shift)
         course_subjects.append({
             'subject_name': cs.subject.name,
             'teacher_name': str(teacher) if teacher else None,
         })
+
     return Response({
         'total_attendance': total_attendance,
         'percent_present': percent_present,
         'percent_absent': percent_absent,
-        'total_subject': total_subject,
+        'total_subject': len(course_subjects),
+        'current_semester': current_semester,
         'data_present': data_present,
         'data_absent': data_absent,
         'data_name': subject_name,

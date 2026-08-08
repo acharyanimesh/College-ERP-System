@@ -1,4 +1,3 @@
-from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
@@ -10,34 +9,11 @@ from django.db import transaction
 
 from ..emails import send_verification_email
 from ..forms import StaffForm
-from ..idgen import next_staff_id
+from ..idgen import next_employee_id
 from ..models import CourseSubject, CustomUser, Staff
+from .people import apply_user_fields, save_profile_pic
 from .permissions import IsAdmin
 from .serializers import form_errors, staff_detail, staff_row
-
-
-def _save_profile_pic(files):
-    passport = files.get('profile_pic')
-    if not passport:
-        return None
-    fs = FileSystemStorage()
-    filename = fs.save(passport.name, passport)
-    return fs.url(filename)
-
-
-def _apply_user_fields(user, form):
-    get = form.cleaned_data.get
-    user.first_name = get('first_name')
-    user.last_name = get('last_name')
-    user.gender = get('gender')
-    user.address_line1 = get('address_line1')
-    user.address_line2 = get('address_line2')
-    user.city = get('city')
-    user.province = get('province')
-    user.address = ", ".join(filter(None, [
-        get('address_line1'), get('address_line2'), get('city'), get('province')]))
-    user.phone_number = get('phone_number')
-    user.date_of_birth = get('date_of_birth')
 
 
 def _apply_staff_fields(staff, form):
@@ -63,18 +39,18 @@ def staff_list(request):
     if not form.is_valid():
         return Response(form_errors(form), status=status.HTTP_400_BAD_REQUEST)
     get = form.cleaned_data.get
-    passport_url = _save_profile_pic(request.FILES) or ''
+    passport_url = save_profile_pic(request.FILES) or ''
     try:
         with transaction.atomic():
             user = CustomUser.objects.create_user(
                 email=get('email'), user_type=2, is_active=False,
                 first_name=get('first_name'), last_name=get('last_name'),
                 profile_pic=passport_url)
-            _apply_user_fields(user, form)
+            apply_user_fields(user, form)
             user.save()
             staff = user.staff
             _apply_staff_fields(staff, form)
-            staff.staff_id = next_staff_id()
+            staff.staff_id = next_employee_id()
             staff.save()
     except Exception as e:
         return Response({'detail': "Could Not Add " + str(e)},
@@ -136,10 +112,10 @@ def staff_item(request, staff_id):
         password = get('password') or None
         if password is not None:
             user.set_password(password)
-        passport_url = _save_profile_pic(request.FILES)
+        passport_url = save_profile_pic(request.FILES)
         if passport_url is not None:
             user.profile_pic = passport_url
-        _apply_user_fields(user, form)
+        apply_user_fields(user, form)
         _apply_staff_fields(staff, form)
         user.save()
         staff.save()

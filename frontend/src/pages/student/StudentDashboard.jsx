@@ -104,6 +104,12 @@ function StudentDashboard() {
     [stats]
   );
 
+  // Both the chart and the table cover only the semester the student is
+  // enrolled in right now (see api/dashboard.student_home), so say so.
+  const semesterLabel = stats?.current_semester
+    ? ` — Semester ${stats.current_semester}`
+    : "";
+
   return (
     <div className="page-container">
       {/* Stats Grid */}
@@ -150,7 +156,11 @@ function StudentDashboard() {
           </div>
           <div className="stat-content">
             <div className="stat-number">{stats?.total_subject ?? 0}</div>
-            <div className="stat-label">Total Subjects</div>
+            <div className="stat-label">
+              {stats?.current_semester
+                ? `Semester ${stats.current_semester} Subjects`
+                : "Total Subjects"}
+            </div>
           </div>
         </div>
       </div>
@@ -171,10 +181,18 @@ function StudentDashboard() {
           <div className="col-lg-6">
             <div className="erpnext-card">
               <div className="card-header">
-                <h5 className="card-title">Subject-wise Attendance</h5>
+                <h5 className="card-title">
+                  Subject-wise Attendance{semesterLabel}
+                </h5>
               </div>
               <div className="card-body">
-                <ThemedChart makeConfig={subjectAttendanceBar} height={300} />
+                {stats.data_name?.length ? (
+                  <ThemedChart makeConfig={subjectAttendanceBar} height={300} />
+                ) : (
+                  <p className="text-muted mb-0">
+                    No subjects are assigned to your current semester yet.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -187,7 +205,7 @@ function StudentDashboard() {
           <div className="erpnext-card">
             <div className="card-header">
               <h5 className="card-title">
-                <i className="fas fa-book me-2"></i>My Subjects
+                <i className="fas fa-book me-2"></i>My Subjects{semesterLabel}
               </h5>
             </div>
             <div className="card-body">
@@ -215,7 +233,7 @@ function StudentDashboard() {
                   ) : (
                     <tr>
                       <td colSpan={3} className="text-center">
-                        No subjects available for your course yet.
+                        No subjects are assigned to your current semester yet.
                       </td>
                     </tr>
                   )}

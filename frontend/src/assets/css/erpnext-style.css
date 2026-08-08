@@ -1683,6 +1683,30 @@ textarea.form-control:focus {
   flex-basis: 100%;
 }
 
+/* `stacked` AvatarField (View/Edit Profile) — the photo becomes a panel in
+   its own grid column beside the fields, so preview and controls sit in a
+   centred column instead of side by side. */
+.avatar-upload-stacked {
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px 12px;
+  border: 1px dashed rgba(192, 160, 84, 0.45);
+  border-radius: 10px;
+  background: var(--surface-ivory);
+}
+
+.avatar-upload-stacked .avatar-upload-preview {
+  width: 128px;
+  height: 128px;
+  font-size: 46px;
+  background: var(--surface-card);
+}
+
+.avatar-upload-stacked .avatar-upload-controls {
+  justify-content: center;
+}
+
 .table {
   color: var(--text-main);
 }

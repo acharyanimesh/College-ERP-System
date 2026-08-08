@@ -3,8 +3,10 @@ import authAPI from "../../api/auth";
 import profileAPI from "../../api/profile";
 import { ListCard } from "../../components/ListCard";
 import {
-  FileField,
+  AvatarField,
   FormCard,
+  Row,
+  SectionHeading,
   SelectField,
   TextAreaField,
   TextField,
@@ -77,8 +79,8 @@ function ChangeEmailCard() {
           )}
         </div>
       )}
-      <form onSubmit={submit} className="form-row align-items-start">
-        <div className="col-auto" style={{ minWidth: 260 }}>
+      <form onSubmit={submit} className="row g-3 align-items-start">
+        <div className="col-xl-4 col-md-6">
           <input
             type="email"
             className="form-control"
@@ -89,7 +91,7 @@ function ChangeEmailCard() {
           />
           {error && <div className="text-danger small mt-1">{error}</div>}
         </div>
-        <div className="col-auto">
+        <div className="col-md-auto">
           <button type="submit" className="btn btn-secondary" disabled={submitting}>
             {submitting
               ? "Submitting..."
@@ -110,6 +112,11 @@ function ChangeEmailCard() {
  * staff_view_profile.html / student_view_profile.html — all render
  * CustomUserForm through form_template.html). Password is only sent when
  * filled, with the template's "session will end" warning on first change.
+ * Laid out like Add/Edit Student: labelled sections and side-by-side
+ * columns rather than one stack of full-width inputs. The card spans the
+ * content area (photo panel on the left, fields on the right) while the
+ * fields themselves stay in narrow grid columns, so the page reads as full
+ * without any single input growing to 400px for a first name.
  */
 function ProfilePage() {
   usePageHeader({
@@ -118,12 +125,16 @@ function ProfilePage() {
   });
   const { addMessage } = useMessages();
   const [fields, setFields] = useState(EMPTY_PROFILE);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState("");
   const passwordNotified = useRef(false);
 
   useEffect(() => {
     profileAPI
       .get()
-      .then((p) => setFields({ ...EMPTY_PROFILE, ...p, profile_pic: null, password: "" }))
+      .then((p) => {
+        setFields({ ...EMPTY_PROFILE, ...p, profile_pic: null, password: "" });
+        setExistingPhotoUrl(p.profile_pic || "");
+      })
       .catch(() => addMessage("Could not load your profile.", "danger"));
   }, [addMessage]);
 
@@ -153,39 +164,70 @@ function ProfilePage() {
         nonFieldError={nonFieldError}
         submitting={submitting}
       >
-        <TextField label="First name" name="first_name" value={fields.first_name} onChange={setField} error={errors.first_name} required />
-        <TextField label="Last name" name="last_name" value={fields.last_name} onChange={setField} error={errors.last_name} required />
-        <TextField
-          label="Email"
-          name="email"
-          type="email"
-          value={fields.email}
-          onChange={setField}
-          disabled
-          help="Use the Change Email Address section below to update this."
-        />
-        <SelectField
-          label="Gender"
-          name="gender"
-          value={fields.gender}
-          onChange={setField}
-          error={errors.gender}
-          options={[
-            { value: "M", label: "Male" },
-            { value: "F", label: "Female" },
-          ]}
-        />
-        <TextField
-          label="Password"
-          name="password"
-          type="password"
-          value={fields.password}
-          onChange={setField}
-          error={errors.password}
-          placeholder="Fill this only if you wish to update password"
-        />
-        <FileField label="Profile pic" name="profile_pic" onChange={setField} error={errors.profile_pic} accept="image/*" />
-        <TextAreaField label="Address" name="address" value={fields.address} onChange={setField} error={errors.address} />
+        <SectionHeading icon="user" title="Personal Information" first />
+        <Row>
+          <AvatarField
+            col="col-lg-3 col-md-4"
+            name="profile_pic"
+            file={fields.profile_pic}
+            existingUrl={existingPhotoUrl}
+            onChange={setField}
+            error={errors.profile_pic}
+            stacked
+          />
+          <div className="col-lg-9 col-md-8">
+            <Row>
+              <TextField col="col-xl-4 col-md-6" label="First name" name="first_name" value={fields.first_name} onChange={setField} error={errors.first_name} required />
+              <TextField col="col-xl-4 col-md-6" label="Last name" name="last_name" value={fields.last_name} onChange={setField} error={errors.last_name} required />
+              <SelectField
+                col="col-xl-4 col-md-6"
+                label="Gender"
+                name="gender"
+                icon="venus-mars"
+                value={fields.gender}
+                onChange={setField}
+                error={errors.gender}
+                options={[
+                  { value: "M", label: "Male" },
+                  { value: "F", label: "Female" },
+                ]}
+              />
+              <TextField
+                col="col-xl-5 col-md-6"
+                label="Email"
+                name="email"
+                type="email"
+                icon="envelope"
+                value={fields.email}
+                onChange={setField}
+                disabled
+                help="Change it in the section below."
+              />
+              <TextAreaField col="col-xl-7 col-12" label="Address" name="address" rows={3} value={fields.address} onChange={setField} error={errors.address} />
+            </Row>
+          </div>
+        </Row>
+
+        <SectionHeading icon="lock" title="Account Security" />
+        <Row>
+          <TextField
+            col="col-xl-3 col-md-5"
+            label="Password"
+            name="password"
+            type="password"
+            icon="lock"
+            value={fields.password}
+            onChange={setField}
+            error={errors.password}
+            placeholder="Only if you wish to change it"
+          />
+          <div className="col-xl-9 col-md-7 d-flex align-items-center">
+            <small className="text-muted">
+              Leave this blank to keep your current password. Changing it ends
+              your session and you'll need to log in again.
+            </small>
+          </div>
+        </Row>
       </FormCard>
       <ChangeEmailCard />
     </>

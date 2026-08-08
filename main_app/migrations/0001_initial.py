@@ -7,6 +7,15 @@ import django.db.models.deletion
 import django.utils.timezone
 import main_app.models
 
+from datetime import datetime, timedelta
+
+
+def expiry():
+    """The old IssuedBook.expiry_date default. It lived in main_app.models
+    until the borrow-request rewrite deleted that model; it is inlined here so
+    this historical migration can still be replayed from an empty database."""
+    return datetime.today() + timedelta(days=14)
+
 
 class Migration(migrations.Migration):
 
@@ -90,7 +99,7 @@ class Migration(migrations.Migration):
                 ('student_id', models.CharField(blank=True, max_length=100)),
                 ('isbn', models.CharField(max_length=13)),
                 ('issued_date', models.DateField(auto_now=True)),
-                ('expiry_date', models.DateField(default=main_app.models.expiry)),
+                ('expiry_date', models.DateField(default=expiry)),
             ],
         ),
         migrations.CreateModel(

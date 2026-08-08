@@ -4,7 +4,6 @@ from django.forms.widgets import DateInput, TextInput
 from django.core.validators import RegexValidator
 
 from .models import *
-from . import models
 
 
 def format_subject_code(value):
@@ -192,6 +191,39 @@ class StaffForm(CustomUserForm):
             ['phone_number', 'date_of_birth', 'teaches_morning', 'teaches_day']
 
 
+class LibrarianForm(CustomUserForm):
+    allowed_email_domains = settings.LIBRARIAN_ALLOWED_EMAIL_DOMAINS
+    password_required_on_insert = False
+
+    # librarian_id is deliberately absent — main_app.idgen issues it on
+    # creation and it never changes afterwards, so a posted value is ignored.
+    # There are no shift fields either: a librarian keeps the library open,
+    # they don't teach a class in one.
+    address_line1 = forms.CharField(required=True, label='Address Line 1')
+    address_line2 = forms.CharField(required=False, label='Address Line 2')
+    city = forms.CharField(required=False, label='City')
+    province = forms.CharField(required=False, label='Province')
+    phone_number = forms.CharField(required=False)
+    date_of_birth = forms.DateField(
+        required=False, widget=DateInput(attrs={'type': 'date'}))
+
+    def __init__(self, *args, **kwargs):
+        super(LibrarianForm, self).__init__(*args, **kwargs)
+        self.fields.pop('address', None)
+        if kwargs.get('instance'):
+            admin = kwargs.get('instance').admin
+            self.fields['phone_number'].initial = admin.phone_number
+            self.fields['date_of_birth'].initial = admin.date_of_birth
+            self.fields['address_line1'].initial = admin.address_line1
+            self.fields['address_line2'].initial = admin.address_line2
+            self.fields['city'].initial = admin.city
+            self.fields['province'].initial = admin.province
+
+    class Meta(CustomUserForm.Meta):
+        model = Librarian
+        fields = CustomUserForm.Meta.fields + ['phone_number', 'date_of_birth']
+
+
 class CourseForm(FormSettings):
     def __init__(self, *args, **kwargs):
         super(CourseForm, self).__init__(*args, **kwargs)
@@ -324,17 +356,13 @@ class StaffEditForm(CustomUserForm):
         fields = CustomUserForm.Meta.fields
 
 
-#todos
-# class TodoForm(forms.ModelForm):
-#     class Meta:
-#         model=Todo
-#         fields=["title","is_finished"]
+class BookForm(FormSettings):
+    """Catalogue entry, managed by the librarian."""
 
-#issue book
-
-class IssueBookForm(forms.Form):
-    isbn2 = forms.ModelChoiceField(queryset=models.Book.objects.all(), empty_label="Book Name [ISBN]", to_field_name="isbn", label="Book (Name and ISBN)")
-    name2 = forms.ModelChoiceField(queryset=models.Student.objects.all(), empty_label="Name ", to_field_name="", label="Student Details")
-    
-    isbn2.widget.attrs.update({'class': 'form-control'})
-    name2.widget.attrs.update({'class':'form-control'})
+    class Meta:
+        model = Book
+        fields = ['name', 'author', 'isbn', 'category', 'total_copies']
+        labels = {
+            'isbn': 'ISBN Number',
+            'total_copies': 'Number of Copies',
+        }
