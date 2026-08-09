@@ -6,6 +6,7 @@ export function homePath(userType) {
   if (String(userType) === "1") return "/admin/home/";
   if (String(userType) === "2") return "/staff/home/";
   if (String(userType) === "4") return "/librarian/home/";
+  if (String(userType) === "5") return "/accountant/home/";
   return "/student/home/";
 }
 

@@ -294,6 +294,78 @@ def librarian_detail(librarian):
     return data
 
 
+def accountant_row(accountant):
+    user = accountant.admin
+    return {
+        'id': accountant.id,
+        'user_id': user.id,
+        'accountant_id': accountant.accountant_id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'verified': user.email_verified,
+    }
+
+
+def accountant_detail(accountant):
+    """Accountant Details page + Edit Accountant form initial values."""
+    user = accountant.admin
+    data = accountant_row(accountant)
+    data.update({
+        'phone_number': user.phone_number,
+        'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else '',
+        'gender': user.gender,
+        'gender_display': user.get_gender_display(),
+        'address': user.address,
+        'address_line1': user.address_line1,
+        'address_line2': user.address_line2,
+        'city': user.city,
+        'province': user.province,
+        'profile_pic': user.profile_pic.url if user.profile_pic else '',
+    })
+    return data
+
+
+def fee_structure_dict(fs):
+    """One row of the price list — a course's fee at a given semester."""
+    return {
+        'id': fs.id,
+        'course': fs.course_id,
+        'course_name': fs.course.name if fs.course else '',
+        'course_short_name': fs.course.short_name if fs.course else '',
+        'semester': fs.semester,
+        'amount': fs.amount,
+    }
+
+
+def fee_payment_dict(payment, for_accountant=False):
+    """One fee receipt. Read-only by nature — the record is written once at the
+    desk and never revised, so there is no matching input shape."""
+    data = {
+        'id': payment.id,
+        'receipt_no': payment.receipt_no,
+        'amount': payment.amount,
+        'semester': payment.semester,
+        'method': payment.method,
+        'method_display': payment.get_method_display(),
+        'note': payment.note,
+        # The snapshot, not the FK: who took the cash has to stay legible even
+        # if that accountant account is gone.
+        'collected_by': payment.collected_by_name,
+        'collected_on': payment.created_at.strftime('%b. %d, %Y'),
+        'collected_at': payment.created_at.strftime('%b. %d, %Y, %I:%M %p'),
+    }
+    student = payment.student
+    user = student.admin
+    data.update({
+        'student_id': student.id,
+        'student_name': ("%s %s" % (user.first_name, user.last_name)).strip(),
+        'student_roll': student.roll_number or '',
+        'student_course': student.course.short_name if student.course else '—',
+    })
+    return data
+
+
 def subject_dict(subject):
     return {
         'id': subject.id,

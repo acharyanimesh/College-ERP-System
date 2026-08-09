@@ -64,9 +64,7 @@ function useRecaptcha(container) {
 }
 
 /**
- * Login screen replicating templates/main_app/login.html: Vanta DOTS
- * background, glass card, reCAPTCHA, remember-me and the little hover/focus
- * effects from the template's inline scripts.
+ * Login screen: brand watermark background, card, reCAPTCHA and remember-me.
  */
 function Login() {
   const { user, loading, login } = useAuth();

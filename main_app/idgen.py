@@ -21,9 +21,9 @@ employee IDs, student roll numbers and student registration numbers.
                           |    +-------- constant institution code
                           +------------- session start year
 
-Employee IDs cover both staff-room roles: Staff.staff_id and
-Librarian.librarian_id come out of one per-year counter, so no two employees
-can end up carrying the same number.
+Employee IDs cover all three staff-room roles: Staff.staff_id,
+Librarian.librarian_id and Accountant.accountant_id come out of one per-year
+counter, so no two employees can end up carrying the same number.
 
 Employee IDs and registration numbers are drawn from IssuedSequence counters, so
 they are never reused after a deletion — a gap in the sequence is preferable to
@@ -99,21 +99,23 @@ def _sort_key(student):
 def next_employee_id(joining_year=None):
     """Allocate the next free employee ID for `joining_year` (default: today).
 
-    One counter serves both staff-room roles, so a staff member and a
-    librarian hired in the same year never share a number.
+    One counter serves every staff-room role, so a staff member, a librarian
+    and an accountant hired in the same year never share a number.
     """
-    from .models import Librarian, Staff
+    from .models import Accountant, Librarian, Staff
 
     year = joining_year or date.today().year
     prefix = "%02d" % (year % 100)
-    # Highest number visible in either table — only relevant for rows issued
-    # before the counter existed (see _claim_serial).
+    # Highest number visible in any of the tables — only relevant for rows
+    # issued before the counter existed (see _claim_serial).
     in_use = max(
         int(highest[2:]) if highest else 0
         for highest in (
             _highest(Staff.objects.filter(staff_id__startswith=prefix), 'staff_id'),
             _highest(Librarian.objects.filter(librarian_id__startswith=prefix),
                      'librarian_id'),
+            _highest(Accountant.objects.filter(accountant_id__startswith=prefix),
+                     'accountant_id'),
         ))
     serial = _claim_serial("staff:%d" % year, in_use)
     if serial > 9999:

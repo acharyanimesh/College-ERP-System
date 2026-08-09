@@ -55,14 +55,17 @@ College-ERP-System/
 │   ├── views.py                     # Just react_app: serves the SPA's index.html
 │   ├── urls.py                      # "" (SPA catch-all) is here; API is separate
 │   ├── EmailBackend.py              # Login by email instead of username
+│   ├── emails.py                    # Verification / email-change emails (send_* helpers)
+│   ├── tokens.py                    # email_verification_token (shared by all verify links)
 │   ├── api/                         # ★ THE JSON API (DRF), mounted at /api/v1/
 │   │   ├── urls.py                  #   route list — start here to find an endpoint
-│   │   ├── auth.py                  #   login / logout / me / check-email
+│   │   ├── auth.py                  #   login / logout / me / check-email / verification
 │   │   ├── dashboard.py             #   admin/staff/student dashboard stats
+│   │   ├── profile.py               #   own-profile GET/PUT (all roles)
 │   │   ├── students.py, staff.py    #   admin management CRUD + drill-downs
 │   │   ├── academics.py             #   courses / subjects / sessions
 │   │   ├── attendance.py            #   take / update / view attendance
-│   │   ├── results.py               #   staff result entry, student results
+│   │   ├── results.py               #   class marksheets, save/finalize, student results
 │   │   ├── leave_feedback.py        #   leave applications + feedback (staff/student)
 │   │   ├── notifications.py         #   admin → staff/student notifications
 │   │   ├── books.py                 #   library
@@ -360,6 +363,19 @@ All of that was removed once the React frontend covered every page:
   (`main_app/api/notifications.py`), no service worker, no push permission
   prompt. `CustomUser.fcm_token` is a vestigial column nothing reads/writes
   anymore; left alone since removing it needs a migration.
+- **Removed in a later dead-code sweep (July 2026):** AdminLTE-era CSS rules
+  nothing rendered anymore (`.small-box`, `.adminlte-default-avatar`,
+  `.control-label`, the unused `.badge-primary/-light/-dark`, `.form-select`
+  and bare `.bg-*` variants, plus unused spacing utilities); the one-time
+  "clear old dark-mode localStorage" shim in `Layout.jsx`; five never-imported
+  forms in `forms.py` (`AdminForm`, `AddSubjectForm`, `StudentEditForm`,
+  `StaffEditForm`, `IssueBookForm`); the unused `six` pin in
+  `requirements.txt`; and stray images (`noise.png`, a duplicate
+  `favicon1.ico` under `frontend/src/assets/image/`).
+- **Still present, known-vestigial (each needs a migration to remove, so
+  deliberately left like `fcm_token`):** the `Admin` model (a row is created
+  by a post_save signal but nothing ever reads it) and the `Library` model
+  (the library feature only uses `Book`/`IssuedBook`).
 
 If you're ever unsure whether something is still live: for a **page**, check
 `frontend/src/App.jsx` for its route; for a **template**, check whether any
@@ -597,6 +613,12 @@ semester, shift`) are exactly what the old Django view expected.
 | `0016_auto_20260625_2320` | `Student.passed_out`, `Student.passed_out_date` |
 | `0017_course_abbreviation` | `Course.abbreviation` |
 | `0018_auto_20260627_1452` | `Attendance.course`, `Attendance.semester` (+ data backfill) |
+| `0019_auto_20260710_1007` | `CustomUser.middle_name`; `Student.parent_full_name`, `parent_phone_number`, `parent_relationship` |
+| `0020_remove_staff_courses` | Removes the old manually-maintained `Staff.courses` M2M (superseded by `taught_courses`, derived from `CourseSubject`) |
+| `0021_auto_20260710_1337` | `StudentResult` reshaped: adds `course`, `semester`, `unit_test`, `internal`, `pre_board`, `final_grade`; drops old `test`/`exam`; new unique-together `(student, subject, course, semester)`; creates `ResultFinalization` |
+| `0022_auto_20260710_1722` | `Attendance` unique-together tightened to `(subject, course, semester, shift, date)` |
+| `0023_auto_20260711_0954` | `CustomUser.email_verified`, `CustomUser.pending_email` |
+| `0024_customuser_pending_email_approved` | `CustomUser.pending_email_approved` |
 
 ## 18. Current seed data & credentials (as of last session)
 
@@ -636,7 +658,130 @@ semester, shift`) are exactly what the old Django view expected.
   Ensure any `unique_*` helper actually increments (a missing `n += 1` caused an
   infinite loop once).
 
-## 20. Repo, environment & cross-device workflow
+## 21. Account activation & email verification
+
+New Staff/Student accounts are created **inactive** with no usable password
+(`students.py: student_list` POST / `staff.py: staff_list` POST, `is_active=False`).
+`emails.py: send_verification_email` emails a one-time link built from
+`tokens.py: email_verification_token` — a `PasswordResetTokenGenerator` subclass
+hashed on `pk + is_active + email_verified + timestamp + email`, so the link
+self-invalidates the instant activation happens (and never before, since both
+flags are untouched until then) — to `{FRONTEND_URL}/verify-email/<uidb64>/<token>/`.
+
+- **Frontend:** `pages/VerifyEmail.jsx` (route `/verify-email/:uidb64/:token`,
+  public — reachable with no session) lets the new owner set their first
+  password. It posts to `auth.py: verify_email_view`, which checks the token,
+  runs Django's `validate_password`, then flips `is_active=True` and
+  `email_verified=True` in one go.
+- **If the initial send fails** (e.g. SMTP not configured yet), the admin sees
+  a "created, but the email could not be sent" note and can retry any time via
+  **Resend verification email** on the student/staff list
+  (`students.py` / `staff.py: resend_verification` → `POST
+  /students/<id>/resend-verification/` or `/staff/<id>/resend-verification/`),
+  blocked once the account is already active.
+- **Admin/HOD is a different flow:** their account is created **already
+  active** (so the bootstrap password works immediately) but starts with
+  `email_verified=False`. `App.jsx`'s `ProtectedLayout` renders
+  `AdminEmailSetup.jsx` in place of the whole app chrome until that flips true.
+  The admin submits their institutional email (checked against
+  `STAFF_ALLOWED_EMAIL_DOMAINS`) via `request_admin_email_verification`, which
+  stores it in `pending_email` and emails a link
+  (`emails.py: send_admin_verification_email`); clicking it hits
+  `confirm_admin_email_verification`, which copies `pending_email` → `email`
+  and sets `email_verified=True`. No admin-approval step here — Admin/HOD
+  gatekeeps its own address.
+- In every case the new/changed address is held in `pending_email` until the
+  link is actually clicked — an abandoned or mistyped attempt can never lock
+  an account out of its original, still-working address.
+
+## 22. Staff/Student email-change approval flow
+
+Staff/Student change their email from the profile page
+(`ProfilePage.jsx` → `auth.py: request_email_change`), but — unlike the
+Admin/HOD flow above — **no email goes out yet**. The request just records
+`pending_email` + `pending_email_approved=False` and appears on the admin's
+**Email Change Requests** queue (`/admin/email-change-requests/`,
+`EmailChangeRequestsView.jsx` → `auth.py: email_change_requests`).
+
+- **Approve** (`approve_email_change`) is what actually sends the
+  verification link (`emails.py: send_email_change_verification`, to the
+  *new* address) and flips `pending_email_approved=True`.
+- **Reject** (`reject_email_change`) clears `pending_email` with no email
+  ever sent — the account keeps its current address.
+- The user then confirms the emailed link like any other verification
+  (`pages/VerifyEmailChange.jsx` → the same `confirm_admin_email_verification`
+  view the Admin flow uses, since applying a confirmed `pending_email` is
+  identical either way — one handler backs both URLs).
+- Migrations: `0023_auto_20260711_0954` added `email_verified` +
+  `pending_email`; `0024_customuser_pending_email_approved` added the
+  approval gate a day later.
+
+## 23. Parent info & middle name (migration 0019)
+
+- `Student` gained **`parent_full_name`**, **`parent_phone_number`**, and
+  **`parent_relationship`** (choices: Father / Mother / Guardian / Other) —
+  all required on Add Student. `CustomUser` gained **`middle_name`**
+  (optional, all roles).
+- Surfaced in `serializers.py: student_detail`, validated by
+  `forms.py: StudentForm`, and shown in the **Parent Information** section of
+  the redesigned Add/Edit Student form (§24).
+
+## 24. Redesigned admin forms (sectioned layout)
+
+Add/Edit Student and Add/Edit Staff used to render as one long column of
+full-width inputs. They're now split into labelled sections via
+`components/forms.jsx: SectionHeading` (icon + title + rule) — for Student:
+**Personal Information → Address → Academic Details → Parent Information →
+Account Security** — with fields grouped into `Row`s sized to their content
+(`col-md-4` / `col-md-6`) instead of stacking every field full-width.
+
+- New shared field component **`AvatarField`**: a circular photo preview with
+  "Choose Photo" / "Remove" controls, replacing the bare file input that used
+  to just say "No file chosen".
+- `TextField` / `SelectField` now commonly take an `icon` prop, rendered as a
+  Bootstrap input-group prepend (e.g. `fa-envelope` on Email, `fa-id-card` on
+  Registration Number).
+- Live behaviors carried over unchanged from before the redesign: the
+  registration number auto-groups to `XXXX-XXXX-XXXX` and the roll number
+  strips to 6 digits as you type; the email field live-checks availability
+  via `auth.py: check_email` and shows a green/red note.
+- Pages: `StudentFormPage.jsx`, `StaffFormPage.jsx`. `FormCard` / `Row` /
+  `SectionHeading` in `components/forms.jsx` are reusable for any future long
+  admin form.
+
+## 25. Results — class-level marksheets with finalization
+
+Results moved from a per-student, one-row-at-a-time page to a **class
+marksheet**: a staff member picks a subject they teach
+(`results.py: classes` → the distinct `(course, semester)` classes for that
+subject, ignoring shift — one result set covers **both shifts together**),
+then a class, and edits the whole roster in one table
+(`StaffManageResult.jsx`).
+
+- `results.py: class_results` returns every roster student (roll-number
+  order, `passed_out=False`) with existing `unit_test` / `internal` /
+  `pre_board` / `final_grade` prefilled; `save_class_results` bulk
+  `update_or_create`s the whole table from the rows the UI sends, in one
+  transaction.
+- **Finalize** (`results.py: finalize`) locks a `(course, subject, semester)`
+  set via `ResultFinalization.get_or_create` — but only once **every** roster
+  student has all three marks **and** a final grade (`{code: "INCOMPLETE",
+  incomplete_count}` 400 otherwise). Once finalized, `save_class_results`
+  refuses further edits (`{code: "FINALIZED"}` 400) and the UI shows a
+  read-only lock banner. There is no unfinalize action.
+- A **View** toggle (no save/finalize buttons shown) lets staff re-check a
+  class read-only without finalizing it.
+- Students see their own marks per semester (`results.py: mine`,
+  `StudentViewResult.jsx`) with a per-subject **Finalized / In progress**
+  badge — marks appear as soon as staff save them, whether or not that
+  subject is finalized yet.
+- Migration `0021_auto_20260710_1337` reshaped `StudentResult` (dropped the
+  old `test`/`exam` fields; added `course`, `semester`, `unit_test`,
+  `internal`, `pre_board`, `final_grade`, and a
+  `(student, subject, course, semester)` unique constraint) and created
+  `ResultFinalization`.
+
+## 26. Repo, environment & cross-device workflow
 
 How the project is packaged and moved between machines.
 

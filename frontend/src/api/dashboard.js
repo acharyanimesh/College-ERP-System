@@ -32,6 +32,11 @@ const dashboardAPI = {
   librarianHome() {
     return axiosClient.get("/dashboard/librarian/");
   },
+
+  /** Accountant dashboard: fee collection + outstanding overview. */
+  accountantHome() {
+    return axiosClient.get("/dashboard/accountant/");
+  },
 };
 
 export default dashboardAPI;

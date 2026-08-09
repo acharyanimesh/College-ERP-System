@@ -212,20 +212,6 @@ body {
   font-family: var(--font-support);
 }
 
-/* AdminLTE default avatar styling */
-.adminlte-default-avatar {
-  width: 40px;
-  height: 40px;
-  font-size: 35px;
-  color: #6c757d;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background-color: #f8f9fa;
-  border: 2px solid #e9ecef;
-}
-
 /* Navigation Menu */
 .nav-section {
   padding: 20px 0;
@@ -424,21 +410,25 @@ body {
   background: var(--surface-card, #fdfcf7);
 }
 
-/* Stats Cards */
+/* Stats Cards — a compact horizontal tile (icon | number + label), with an
+   optional small corner link instead of a full-width button, so a card
+   without a "View" link isn't left with dead space at the bottom. */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
   margin-bottom: 30px;
 }
 
 .stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   background: var(--surface-card, #fdfcf7);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 24px;
-  text-align: center;
-  transition: all 0.3s ease;
+  border-radius: 12px;
+  padding: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
 }
@@ -449,18 +439,16 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--primary-color), var(--success-color), var(--warning-color), var(--danger-color));
-  opacity: 0.8;
+  height: 3px;
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
 }
 
-/* Accent bar color keys off data-tone (not position), so any number of
-   stat cards can be added without the color cycling breaking. */
+/* Accent bar + icon color key off data-tone (not position), so any number
+   of stat cards can be added without the color cycling breaking. */
 .stat-card[data-tone="primary"]::before { background: var(--primary-color); }
 .stat-card[data-tone="success"]::before { background: var(--success-color); }
 .stat-card[data-tone="warning"]::before { background: var(--warning-color); }
@@ -468,47 +456,57 @@ body {
 .stat-card[data-tone="info"]::before { background: var(--primary-dark, var(--primary-color)); }
 .stat-card[data-tone="accent"]::before { background: var(--accent-light); }
 
+.stat-card-body {
+  min-width: 0;
+}
+
 .stat-number {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
-  margin: 10px 0;
+  line-height: 1.15;
+  color: var(--primary-color);
 }
 
 .stat-label {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 12.5px;
   font-family: var(--font-support);
-  margin: 0;
+  margin: 2px 0 0;
+  line-height: 1.3;
 }
 
 .stat-icon {
-  font-size: 24px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 10px;
 }
 
-.stat-icon.primary {
+.stat-icon.primary,
+.stat-icon.bg-blue {
   background-color: rgba(14, 78, 76, 0.1);
   color: var(--primary-color);
 }
 
-.stat-icon.success {
-  background-color: rgba(40, 167, 69, 0.1);
+.stat-icon.success,
+.stat-icon.bg-green {
+  background-color: rgba(22, 100, 96, 0.14);
   color: var(--success-color);
 }
 
-.stat-icon.warning {
-  background-color: rgba(192, 160, 84, 0.16);
+.stat-icon.warning,
+.stat-icon.bg-purple {
+  background-color: rgba(192, 160, 84, 0.18);
   color: var(--accent-dark);
 }
 
-.stat-icon.danger {
-  background-color: rgba(220, 53, 69, 0.1);
+.stat-icon.danger,
+.stat-icon.bg-red {
+  background-color: rgba(155, 95, 69, 0.16);
   color: var(--danger-color);
 }
 
@@ -518,50 +516,33 @@ body {
 }
 
 .stat-icon.accent {
-  background-color: rgba(216, 190, 126, 0.24);
+  background-color: rgba(216, 190, 126, 0.28);
   color: var(--accent-dark);
 }
 
-/* Legacy color classes for backward compatibility */
-.stat-icon.bg-blue {
-  background-color: rgba(0, 123, 255, 0.1);
-  color: #007bff;
+/* Optional "View" affordance — a small corner link instead of a full-width
+   button, so its presence/absence doesn't change the card's height. */
+.stat-card-link {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: var(--surface-ivory, #f5f2e8);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.stat-icon.bg-green {
-  background-color: rgba(40, 167, 69, 0.1);
-  color: var(--success-color);
-}
-
-.stat-icon.bg-red {
-  background-color: rgba(220, 53, 69, 0.1);
-  color: var(--danger-color);
-}
-
-.stat-icon.bg-purple {
-  background-color: rgba(111, 66, 193, 0.1);
-  color: #6f42c1;
-}
-
-/* Light mode adjustments for small-box icons */
-.small-box .icon {
-  transition: color 0.3s ease;
-}
-
-.small-box.bg-info .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-success .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-danger .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-primary .icon {
-  color: rgba(255, 255, 255, 0.8);
+.stat-card-link:hover {
+  color: #fff;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
 /* Buttons - ERPNext Style */
@@ -1068,23 +1049,8 @@ body {
   color: #fff !important;
 }
 
-.badge-primary {
-  background-color: var(--primary-color) !important;
-  color: #fff !important;
-}
-
 .badge-secondary {
   background-color: var(--secondary-color) !important;
-  color: #fff !important;
-}
-
-.badge-light {
-  background-color: #f8f9fa !important;
-  color: #212529 !important;
-}
-
-.badge-dark {
-  background-color: #343a40 !important;
   color: #fff !important;
 }
 
@@ -1153,8 +1119,7 @@ body {
   }
   
   /* Form controls on mobile */
-  .form-control,
-  .form-select {
+  .form-control {
     font-size: 16px !important; /* Prevents zoom on iOS */
   }
   
@@ -1221,19 +1186,12 @@ body {
 .mb-2 { margin-bottom: 0.5rem; }
 .mb-3 { margin-bottom: 1rem; }
 .mb-4 { margin-bottom: 1.5rem; }
-.mb-5 { margin-bottom: 3rem; }
-.mt-0 { margin-top: 0; }
 .mt-1 { margin-top: 0.25rem; }
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 1rem; }
 .mt-4 { margin-top: 1.5rem; }
-.mt-5 { margin-top: 3rem; }
 .p-0 { padding: 0; }
-.p-1 { padding: 0.25rem; }
 .p-2 { padding: 0.5rem; }
-.p-3 { padding: 1rem; }
-.p-4 { padding: 1.5rem; }
-.p-5 { padding: 3rem; }
 
 /* ------------------------------------------------------------------
    Fixed minimal brand refresh: Deep Teal, Verdant, Antique Gold,
@@ -1494,70 +1452,6 @@ body {
   color: var(--accent-color);
 }
 
-.stat-card {
-  text-align: left;
-  padding: 22px;
-}
-
-.stat-card::before {
-  height: 3px;
-  background: var(--accent-color);
-}
-
-.stat-card[data-tone="primary"]::before { background: var(--primary-color); }
-.stat-card[data-tone="success"]::before { background: var(--accent-color); }
-.stat-card[data-tone="warning"]::before { background: var(--primary-mid); }
-.stat-card[data-tone="danger"]::before { background: var(--accent-light); }
-.stat-card[data-tone="info"]::before { background: var(--primary-dark); }
-.stat-card[data-tone="accent"]::before { background: var(--accent-dark); }
-
-.stat-number {
-  color: var(--primary-color);
-  font-size: 30px;
-}
-
-.stat-label {
-  color: var(--text-muted);
-}
-
-.stat-icon {
-  border-radius: 8px;
-}
-
-.stat-icon.primary,
-.stat-icon.bg-blue {
-  background: rgba(14, 78, 76, 0.1);
-  color: var(--primary-color);
-}
-
-.stat-icon.success,
-.stat-icon.bg-green {
-  background: rgba(192, 160, 84, 0.18);
-  color: #927638;
-}
-
-.stat-icon.warning,
-.stat-icon.bg-purple {
-  background: rgba(22, 100, 96, 0.1);
-  color: var(--primary-mid);
-}
-
-.stat-icon.danger,
-.stat-icon.bg-red {
-  background: rgba(216, 190, 126, 0.24);
-  color: #8f6f2f;
-}
-
-.stat-icon.info {
-  background: rgba(9, 55, 53, 0.14);
-  color: var(--primary-dark);
-}
-
-.stat-icon.accent {
-  background: rgba(163, 129, 58, 0.16);
-  color: var(--accent-dark);
-}
-
 .btn {
   border-radius: 8px;
   font-weight: 650;
@@ -1611,14 +1505,12 @@ body {
 }
 
 .form-label,
-.form-group label,
-.control-label {
+.form-group label {
   color: var(--text-main);
   font-weight: 650;
 }
 
 .form-control,
-.form-select,
 select.form-control,
 textarea.form-control {
   background-color: var(--surface-card, #fdfcf7) !important;
@@ -1628,11 +1520,106 @@ textarea.form-control {
 }
 
 .form-control:focus,
-.form-select:focus,
 select.form-control:focus,
 textarea.form-control:focus {
   border-color: var(--primary-mid) !important;
   box-shadow: 0 0 0 3px rgba(216, 190, 126, 0.32) !important;
+}
+
+/* Icon-prefixed fields (TextField/SelectField `icon` prop) */
+.input-group-text {
+  background: var(--surface-ivory) !important;
+  border-color: rgba(192, 160, 84, 0.42) !important;
+  color: var(--accent-dark) !important;
+  border-radius: 8px 0 0 8px !important;
+}
+
+.input-group .form-control,
+.input-group select.form-control {
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* Section headings inside Add/Edit Student & Staff forms — an icon + title
+   with a rule underneath, breaking a long form into short labelled groups. */
+.form-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 32px 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(192, 160, 84, 0.32);
+}
+
+.form-section-heading-first {
+  margin-top: 4px;
+}
+
+.form-section-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface-ivory);
+  border: 1px solid rgba(192, 160, 84, 0.45);
+  color: var(--accent-dark);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.form-section-heading h5 {
+  margin: 0;
+  color: var(--primary-color);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Avatar/profile-photo picker (AvatarField) */
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.avatar-upload-preview {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-ivory);
+  border: 2px solid rgba(192, 160, 84, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent-dark);
+  font-size: 32px;
+}
+
+.avatar-upload-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-upload-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.avatar-upload-clear {
+  color: var(--danger-color) !important;
+  text-decoration: none;
+  padding: 0;
+}
+
+.avatar-upload-controls small {
+  flex-basis: 100%;
 }
 
 .table {
@@ -1662,7 +1649,6 @@ textarea.form-control:focus {
   letter-spacing: 0 !important;
 }
 
-.badge-primary,
 .badge-info {
   background-color: rgba(14, 78, 76, 0.1) !important;
   color: var(--primary-color) !important;
@@ -1683,8 +1669,7 @@ textarea.form-control:focus {
   color: var(--danger-color) !important;
 }
 
-.badge-secondary,
-.badge-light {
+.badge-secondary {
   background-color: var(--surface-ivory) !important;
   color: var(--text-muted) !important;
 }
@@ -1740,23 +1725,6 @@ textarea.form-control:focus {
   background: var(--surface-card, #fdfcf7);
   border: 1px solid rgba(192, 160, 84, 0.38);
   border-radius: 8px;
-}
-
-.bg-primary,
-.bg-info {
-  background-color: var(--primary-color) !important;
-}
-
-.bg-success {
-  background-color: var(--primary-mid) !important;
-}
-
-.bg-warning {
-  background-color: var(--accent-color) !important;
-}
-
-.bg-danger {
-  background-color: var(--danger-color) !important;
 }
 
 @media (max-width: 768px) {

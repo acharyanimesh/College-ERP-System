@@ -83,7 +83,8 @@ class Session(models.Model):
 
 
 class CustomUser(AbstractUser):
-    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"), (4, "Librarian"))
+    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"), (4, "Librarian"),
+                 (5, "Accountant"))
     GENDER = [("M", "Male"), ("F", "Female")]
     
     
@@ -349,6 +350,25 @@ class Librarian(models.Model):
         return self.admin.first_name + " " + self.admin.last_name
 
 
+class Accountant(models.Model):
+    """The college accountant: runs the finance desk — sets the per-semester
+    fee for each course and takes students' fee payments at the counter. Like
+    the Librarian, an accountant is neither a teacher nor an admin (they don't
+    manage courses, students or staff), so this is its own role rather than a
+    flag on Staff.
+
+    The employee ID is drawn from the SAME per-year counter as Staff and
+    Librarian (see idgen.next_employee_id), so one number identifies exactly
+    one employee regardless of which staff-room role they hold."""
+    accountant_id = models.CharField(
+        max_length=6, null=True, blank=True, unique=True,
+        validators=[RegexValidator(r'^\d{6}$', 'Accountant ID must be exactly 6 digits')])
+    admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.admin.first_name + " " + self.admin.last_name
+
+
 # How long a borrowed book may be kept, and what a late day costs.
 LOAN_PERIOD_DAYS = 14
 FINE_PER_DAY = 10
@@ -594,6 +614,93 @@ class LibraryFine(ImmutableRecord):
         return "LIB-FINE-%06d" % (n + 1)
 
 
+class FeeStructure(models.Model):
+    """What one semester of one course costs — the price list the accountant
+    keeps. A student's bill for a term is read off the row for their course at
+    their current semester, so setting the amount here is what makes every
+    "outstanding" figure on the finance desk mean something.
+
+    Editable (unlike a FeePayment receipt): the college revises its fees, and
+    the row is the current price, not a record of a past transaction."""
+    course = models.ForeignKey(Course, on_delete=models.CASCADE,
+                               related_name='fee_structures')
+    semester = models.PositiveSmallIntegerField()
+    # Per-semester tuition in rupees. Whole numbers — the desk deals in rupees,
+    # not paisa.
+    amount = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('course', 'semester')
+        ordering = ['course', 'semester']
+
+    def __str__(self):
+        return "%s Sem %d — Rs. %d" % (
+            self.course.short_name if self.course else '?', self.semester,
+            self.amount)
+
+
+class FeePayment(ImmutableRecord):
+    """The receipt for a fee a student paid at the counter.
+
+    Money changed hands, so — exactly like a LibraryFine — this row is
+    append-only (see ImmutableRecord): a mistake is corrected by issuing a
+    second, offsetting record, never by editing or deleting this one. Both
+    portals read the same rows: the student sees their own receipts, the
+    accountant sees every receipt taken at the desk.
+
+    `semester` is a snapshot of the semester the payment was for, kept here so
+    a receipt still explains itself after the student is promoted. The
+    accountant is stored twice on purpose — the FK is for querying, the name is
+    a snapshot so who took the money survives that account later being
+    removed."""
+    CASH = 'cash'
+    ONLINE = 'online'
+    CHEQUE = 'cheque'
+    BANK = 'bank'
+    METHOD_CHOICES = (
+        (CASH, 'Cash'),
+        (ONLINE, 'Online transfer'),
+        (CHEQUE, 'Cheque'),
+        (BANK, 'Bank deposit'),
+    )
+
+    # PROTECT: nothing a receipt points at may be deleted out from under it, or
+    # the record stops explaining itself.
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='fee_payments')
+    # The semester this payment was collected against.
+    semester = models.PositiveSmallIntegerField()
+    receipt_no = models.CharField(max_length=20, unique=True)
+    # In rupees. Whole numbers.
+    amount = models.PositiveIntegerField()
+    method = models.CharField(max_length=6, choices=METHOD_CHOICES, default=CASH)
+    collected_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='payments_collected')
+    collected_by_name = models.CharField(max_length=150, blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return "%s · %s · Rs. %d" % (self.receipt_no, self.student, self.amount)
+
+    @staticmethod
+    def next_receipt_no():
+        """FEE-000001, allocated on insert. Sequential rather than random
+        because a cash receipt gets read out loud and written in a register."""
+        last = FeePayment.objects.order_by('-id').values_list(
+            'receipt_no', flat=True).first()
+        n = 0
+        if last and last.rsplit('-', 1)[-1].isdigit():
+            n = int(last.rsplit('-', 1)[-1])
+        return "FEE-%06d" % (n + 1)
+
+
 class Subject(models.Model):
     name = models.CharField(max_length=120)
     code = models.CharField(max_length=20, blank=True, default="")
@@ -767,6 +874,8 @@ def create_user_profile(sender, instance, created, **kwargs):
             Student.objects.create(admin=instance)
         if user_type == '4':
             Librarian.objects.create(admin=instance)
+        if user_type == '5':
+            Accountant.objects.create(admin=instance)
 
 
 @receiver(post_save, sender=CustomUser)
@@ -780,5 +889,7 @@ def save_user_profile(sender, instance, **kwargs):
         instance.student.save()
     if user_type == '4':
         instance.librarian.save()
+    if user_type == '5':
+        instance.accountant.save()
 
 # todos

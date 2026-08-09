@@ -2,16 +2,17 @@ import math
 from datetime import date
 
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from ..models import (Attendance, AttendanceReport, Book, BookRequest, Course,
-                      CourseSubject, LeaveReportStaff, LeaveReportStudent,
-                      NotificationStaff, NotificationStudent, Session, Staff,
-                      Student, Subject)
-from .permissions import IsAdmin, IsLibrarian, IsStaff, IsStudent
-from .serializers import book_request_dict, course_dict
+                      CourseSubject, FeePayment, LeaveReportStaff,
+                      LeaveReportStudent, LibraryFine, NotificationStaff,
+                      NotificationStudent, Session, Staff, Student, Subject)
+from .finance import fee_map, paid_map, student_fee_view
+from .permissions import IsAccountant, IsAdmin, IsLibrarian, IsStaff, IsStudent
+from .serializers import book_request_dict, course_dict, fee_payment_dict
 
 
 def _attention_alerts(today):
@@ -413,4 +414,67 @@ def student_home(request):
         'data_absent': data_absent,
         'data_name': subject_name,
         'course_subjects': course_subjects,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAccountant])
+def accountant_home(request):
+    """The finance desk at a glance: what the term should bring in, what has
+    come in, what is still owed — plus the shape of it per course and a read on
+    the library fines the desk also has visibility of."""
+    today = date.today()
+    fees, paids = fee_map(), paid_map()
+
+    students = Student.objects.filter(passed_out=False).select_related(
+        'admin', 'course')
+    rows = [student_fee_view(s, fees, paids) for s in students]
+
+    term_expected = sum(r['expected'] for r in rows)
+    term_collected = sum(r['paid'] for r in rows)
+    term_outstanding = sum(r['outstanding'] for r in rows)
+    status_counts = {'paid': 0, 'partial': 0, 'unpaid': 0, 'unbilled': 0}
+    for r in rows:
+        status_counts[r['status']] += 1
+
+    # Per-course roll-up of the same term figures.
+    by_course = {}
+    for r in rows:
+        c = by_course.setdefault(r['course_short_name'], {
+            'course': r['course_short_name'], 'students': 0,
+            'expected': 0, 'collected': 0, 'outstanding': 0})
+        c['students'] += 1
+        c['expected'] += r['expected']
+        c['collected'] += r['paid']
+        c['outstanding'] += r['outstanding']
+
+    all_time = FeePayment.objects.aggregate(total=Sum('amount'))['total'] or 0
+    collected_today = FeePayment.objects.filter(
+        created_at__date=today).aggregate(total=Sum('amount'))['total'] or 0
+
+    recent = FeePayment.objects.select_related(
+        'student__admin', 'student__course')[:8]
+
+    # Library fines the desk also has an eye on: what has been receipted, and
+    # what is still owed on loans currently out and overdue.
+    lib_fines_collected = LibraryFine.objects.filter(
+        kind=LibraryFine.PAID).aggregate(total=Sum('amount'))['total'] or 0
+    issued = BookRequest.objects.filter(status=BookRequest.ISSUED)
+    lib_fines_outstanding = sum(r.fine_outstanding for r in issued)
+
+    return Response({
+        'total_students': len(rows),
+        'term_expected': term_expected,
+        'term_collected': term_collected,
+        'term_outstanding': term_outstanding,
+        'collection_rate': round((term_collected / term_expected) * 100)
+                           if term_expected else 0,
+        'collected_all_time': all_time,
+        'collected_today': collected_today,
+        'status_counts': status_counts,
+        'by_course': sorted(by_course.values(), key=lambda c: -c['outstanding']),
+        'recent_payments': [
+            fee_payment_dict(p, for_accountant=True) for p in recent],
+        'library_fines_collected': lib_fines_collected,
+        'library_fines_outstanding': lib_fines_outstanding,
     })

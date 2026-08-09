@@ -1,7 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 # user_type codes from CustomUser.USER_TYPE.
-ADMIN, STAFF, STUDENT, LIBRARIAN = '1', '2', '3', '4'
+ADMIN, STAFF, STUDENT, LIBRARIAN, ACCOUNTANT = '1', '2', '3', '4', '5'
 
 
 def _has_type(request, *types):
@@ -37,3 +37,15 @@ class IsLibrarianOrAdmin(BasePermission):
 
     def has_permission(self, request, view):
         return _has_type(request, LIBRARIAN, ADMIN)
+
+
+class IsAccountant(BasePermission):
+    def has_permission(self, request, view):
+        return _has_type(request, ACCOUNTANT)
+
+
+class IsAccountantOrAdmin(BasePermission):
+    """The finance desk, plus the admin's read-only oversight of it."""
+
+    def has_permission(self, request, view):
+        return _has_type(request, ACCOUNTANT, ADMIN)

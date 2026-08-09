@@ -1,6 +1,6 @@
 from django import forms
 from django.conf import settings
-from django.forms.widgets import DateInput, TextInput
+from django.forms.widgets import DateInput
 from django.core.validators import RegexValidator
 
 from .models import *
@@ -32,7 +32,7 @@ class FormSettings(forms.ModelForm):
 
 class CustomUserForm(FormSettings):
     # Subclasses (StaffForm/StudentForm) restrict which email domains are
-    # acceptable for that role; None means no restriction (e.g. AdminForm).
+    # acceptable for that role; None means no restriction.
     allowed_email_domains = None
     # Subclasses whose owner sets their own password via the email
     # verification link (StaffForm/StudentForm) don't require one on insert.
@@ -44,9 +44,6 @@ class CustomUserForm(FormSettings):
     last_name = forms.CharField(required=True)
     address = forms.CharField(widget=forms.Textarea)
     password = forms.CharField(widget=forms.PasswordInput, required=False)
-    widget = {
-        'password': forms.PasswordInput(),
-    }
     profile_pic = forms.ImageField(required=False)
 
     def __init__(self, *args, **kwargs):
@@ -138,15 +135,6 @@ class StudentForm(CustomUserForm):
              'parent_full_name', 'parent_phone_number', 'parent_relationship']
 
 
-class AdminForm(CustomUserForm):
-    def __init__(self, *args, **kwargs):
-        super(AdminForm, self).__init__(*args, **kwargs)
-
-    class Meta(CustomUserForm.Meta):
-        model = Admin
-        fields = CustomUserForm.Meta.fields
-
-
 class StaffForm(CustomUserForm):
     allowed_email_domains = settings.STAFF_ALLOWED_EMAIL_DOMAINS
     password_required_on_insert = False
@@ -224,6 +212,39 @@ class LibrarianForm(CustomUserForm):
         fields = CustomUserForm.Meta.fields + ['phone_number', 'date_of_birth']
 
 
+class AccountantForm(CustomUserForm):
+    allowed_email_domains = settings.ACCOUNTANT_ALLOWED_EMAIL_DOMAINS
+    password_required_on_insert = False
+
+    # accountant_id is deliberately absent — main_app.idgen issues it on
+    # creation and it never changes afterwards, so a posted value is ignored.
+    # Like a librarian, an accountant has no shift and no subjects: they run
+    # the finance desk, not a class.
+    address_line1 = forms.CharField(required=True, label='Address Line 1')
+    address_line2 = forms.CharField(required=False, label='Address Line 2')
+    city = forms.CharField(required=False, label='City')
+    province = forms.CharField(required=False, label='Province')
+    phone_number = forms.CharField(required=False)
+    date_of_birth = forms.DateField(
+        required=False, widget=DateInput(attrs={'type': 'date'}))
+
+    def __init__(self, *args, **kwargs):
+        super(AccountantForm, self).__init__(*args, **kwargs)
+        self.fields.pop('address', None)
+        if kwargs.get('instance'):
+            admin = kwargs.get('instance').admin
+            self.fields['phone_number'].initial = admin.phone_number
+            self.fields['date_of_birth'].initial = admin.date_of_birth
+            self.fields['address_line1'].initial = admin.address_line1
+            self.fields['address_line2'].initial = admin.address_line2
+            self.fields['city'].initial = admin.city
+            self.fields['province'].initial = admin.province
+
+    class Meta(CustomUserForm.Meta):
+        model = Accountant
+        fields = CustomUserForm.Meta.fields + ['phone_number', 'date_of_birth']
+
+
 class CourseForm(FormSettings):
     def __init__(self, *args, **kwargs):
         super(CourseForm, self).__init__(*args, **kwargs)
@@ -244,27 +265,6 @@ class SubjectForm(FormSettings):
 
     def __init__(self, *args, **kwargs):
         super(SubjectForm, self).__init__(*args, **kwargs)
-        # Subject codes are uppercase with a space after the first 3 chars
-        # (e.g. 'ABC 123') — format live as the user types.
-        self.fields['code'].widget.attrs.update({
-            'class': 'form-control text-uppercase',
-            'oninput': SUBJECT_CODE_ONINPUT,
-        })
-
-    def clean_code(self):
-        return format_subject_code(self.cleaned_data.get('code'))
-
-    class Meta:
-        model = Subject
-        fields = ['name', 'code', 'credit_hours']
-        labels = {'code': 'Subject Code'}
-
-
-class AddSubjectForm(FormSettings):
-    # Courses + per-course semesters are handled manually in add_subject.
-
-    def __init__(self, *args, **kwargs):
-        super(AddSubjectForm, self).__init__(*args, **kwargs)
         # Subject codes are uppercase with a space after the first 3 chars
         # (e.g. 'ABC 123') — format live as the user types.
         self.fields['code'].widget.attrs.update({
