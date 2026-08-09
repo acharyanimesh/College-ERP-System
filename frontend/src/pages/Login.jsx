@@ -5,7 +5,14 @@ import { homePath } from "../layouts/Navbar";
 import Watermark from "../layouts/Watermark";
 import brandIcon from "../assets/image/brand-icon.png";
 
-const RECAPTCHA_SITE_KEY = "6LfTGD4qAAAAAJLKy1TGJY7uuTh_T1cB5VikRWjF";
+// Half of a reCAPTCHA key pair; the backend holds the other half as
+// RECAPTCHA_SECRET. Unset means no widget and no check — the backend agrees,
+// because it enforces captcha only when it has a secret. A site key is bound
+// to specific domains, so a deployment needs its own pair registered at
+// https://www.google.com/recaptcha/admin; the literal that used to be here
+// belonged to somebody else's domains and would only ever have blocked
+// logins on this one.
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
 
 // Django keeps serving the password-reset flow during the migration; link to
 // it on the backend origin (VITE_API_URL is `<backend>/api/v1`).
@@ -17,7 +24,7 @@ function useRecaptcha(container) {
 
   useEffect(() => {
     const el = container.current;
-    if (!el) return undefined;
+    if (!el || !RECAPTCHA_SITE_KEY) return undefined;
 
     const renderWidget = () => {
       if (window.grecaptcha?.render && el.childNodes.length === 0) {
@@ -180,10 +187,13 @@ function Login() {
             />
           </div>
 
-          {/* reCAPTCHA */}
-          <div className="form-group text-center">
-            <div className="g-recaptcha" ref={recaptchaRef}></div>
-          </div>
+          {/* reCAPTCHA, only when a site key is configured — an empty box
+              with "Invalid domain for site key" in it is worse than no box. */}
+          {RECAPTCHA_SITE_KEY && (
+            <div className="form-group text-center">
+              <div className="g-recaptcha" ref={recaptchaRef}></div>
+            </div>
+          )}
 
           <div className="form-group">
             <div className="form-check">

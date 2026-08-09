@@ -50,6 +50,21 @@ services:
         sync: false
       - key: DEFAULT_FROM_EMAIL
         sync: false
+      # The first login into the empty database. build.sh creates this
+      # account once and skips thereafter; the free plan has no shell to run
+      # createsuperuser from by hand. Delete both after you have logged in
+      # and made a second admin, so the password stops living in a dashboard.
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+      # reCAPTCHA on the login page, off unless you set this. It is the
+      # backend half of a key pair from
+      # https://www.google.com/recaptcha/admin — the frontend half is
+      # VITE_RECAPTCHA_SITE_KEY, set on Vercel, and a site key only works on
+      # the domains it was registered for.
+      - key: RECAPTCHA_SECRET
+        sync: false
     # Uploaded files — profile photos and bank deposit slips — live on disk.
     # Without this they are wiped on every deploy, which for a deposit slip
     # means the evidence behind a receipt disappears while the receipt

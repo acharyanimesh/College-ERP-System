@@ -1,4 +1,5 @@
 import json
+import os
 
 import requests
 from django.conf import settings
@@ -35,8 +36,16 @@ APPROVAL_REQUIRED_ROLES = (STAFF, STUDENT, LIBRARIAN, ACCOUNTANT)
 ROLE_LABELS = {STAFF: 'Staff', STUDENT: 'Student', LIBRARIAN: 'Librarian',
                ACCOUNTANT: 'Accountant'}
 
-# Same domain-bound key doLogin used.
-CAPTCHA_SECRET = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
+# reCAPTCHA secret, empty unless one is supplied. Blank switches the check
+# off (see login_view) rather than failing every login.
+#
+# The key that used to sit here as a literal is in this repository's history
+# and is therefore public; it is also registered against domains this
+# deployment does not own, so it could never have verified anything here.
+# Register your own pair at https://www.google.com/recaptcha/admin, then set
+# RECAPTCHA_SECRET on the backend and VITE_RECAPTCHA_SITE_KEY on the
+# frontend. They are two halves of one key pair and are useless apart.
+CAPTCHA_SECRET = os.environ.get('RECAPTCHA_SECRET', '').strip()
 
 
 @ensure_csrf_cookie
@@ -45,9 +54,20 @@ CAPTCHA_SECRET = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
 def login_view(request):
     """Session login (mirrors views.doLogin). Body: { email, password,
     remember, captcha }. Returns the same profile payload as /auth/me/."""
-    # Google reCAPTCHA (skipped in local DEBUG mode where the domain-bound
-    # key can't verify).
-    if not settings.DEBUG:
+    # Google reCAPTCHA, enforced only once a secret is configured.
+    #
+    # It used to be keyed off `not DEBUG`, which meant the check switched
+    # itself ON the moment the app was deployed — with a hardcoded key pair
+    # registered against somebody else's domains. The widget would refuse to
+    # render on the new domain, the token would be empty, and every login
+    # would be rejected: the app would be locked to everyone, including its
+    # own administrator, with "Invalid Captcha" as the only clue.
+    #
+    # Presence of a secret is the honest condition: it is the thing that
+    # decides whether this check CAN work, and it makes enabling captcha on a
+    # deployment a matter of setting two environment variables (this one and
+    # the frontend's VITE_RECAPTCHA_SITE_KEY) rather than a code change.
+    if CAPTCHA_SECRET:
         data = {
             'secret': CAPTCHA_SECRET,
             'response': request.data.get('captcha'),

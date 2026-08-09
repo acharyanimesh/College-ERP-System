@@ -1,11 +1,15 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import os
 import shutil
 import tempfile
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -17,7 +21,7 @@ from .idgen import (
     resequence_cohort)
 from .library_reminders import send_due_soon_reminders
 from .models import (DUE_SOON_REMINDER_DAYS, FINE_PER_DAY, LOAN_PERIOD_DAYS,
-                     RENEWAL_PERIOD_DAYS, Accountant, Book, BookRequest,
+                     RENEWAL_PERIOD_DAYS, Accountant, Admin, Book, BookRequest,
                      Course, CustomUser, DepositSlip, FeeAdjustment, FeeHead,
                      FeeInvoice, FeePayment, FeeStructure, FeeStructureItem,
                      Librarian, LibraryFine, NotificationStudent,
@@ -1858,6 +1862,95 @@ class FeeCounterTests(TestCase):
         self.assertEqual(bill.data['balance'], Decimal('30000.00'))
         self.assertEqual([p['receipt_no'] for p in bill.data['payments']],
                          [receipt['receipt_no']])
+
+
+class FirstLoginBootstrapTests(TestCase):
+    """`createsuperuser --no-input`, which build.sh runs on Render.
+
+    Render's free plan has no shell, so this command is the only way into a
+    freshly deployed database. It runs unattended against a custom user model
+    with email as the username field — worth proving, because the failure
+    mode is a deployed app that nobody can log into.
+    """
+
+    ENV = {'DJANGO_SUPERUSER_EMAIL': 'hod@ncit.edu.np',
+           'DJANGO_SUPERUSER_PASSWORD': 'not-a-common-password-42'}
+
+    def test_it_creates_an_admin_who_can_actually_log_in(self):
+        with patch.dict(os.environ, self.ENV):
+            call_command('createsuperuser', interactive=False, verbosity=0)
+
+        user = CustomUser.objects.get(email='hod@ncit.edu.np')
+        self.assertTrue(user.is_superuser, "needs /django-admin/ access")
+        # user_type defaults to HOD, so the same account is the application's
+        # own admin and not merely a Django superuser...
+        self.assertEqual(str(user.user_type), '1')
+        # ...which means the post_save signal gave it an Admin profile; the
+        # role dashboards go looking for one.
+        self.assertTrue(Admin.objects.filter(admin=user).exists())
+
+        response = self.client.post("/api/v1/auth/login/", self.ENV and {
+            'email': 'hod@ncit.edu.np',
+            'password': 'not-a-common-password-42'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['user_type'], '1')
+
+    def test_running_it_twice_is_refused_rather_than_duplicating(self):
+        """build.sh swallows this failure, which is what makes redeploying
+        safe — but the command has to fail rather than reset the password."""
+        with patch.dict(os.environ, self.ENV):
+            call_command('createsuperuser', interactive=False, verbosity=0)
+            with self.assertRaises(CommandError):
+                call_command('createsuperuser', interactive=False, verbosity=0)
+        self.assertEqual(CustomUser.objects.filter(
+            email='hod@ncit.edu.np').count(), 1)
+
+
+class LoginCaptchaTests(TestCase):
+    """Whether the login page's reCAPTCHA is enforced.
+
+    This used to switch itself on whenever DEBUG was off — which is to say,
+    the moment the app was deployed — against a key pair hardcoded here and
+    registered to domains no deployment of it would own. The result was an
+    app that locked out everyone including its own administrator, and said
+    only "Invalid Captcha".
+    """
+
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="not-a-common-password-42",
+            user_type=1, first_name="Hari", last_name="Oli")
+
+    def login(self, **extra):
+        payload = {'email': "hod@ncit.edu.np",
+                   'password': "not-a-common-password-42"}
+        payload.update(extra)
+        return self.client.post("/api/v1/auth/login/", payload)
+
+    def test_login_works_when_no_captcha_is_configured(self):
+        """The default. No RECAPTCHA_SECRET, no check — anything else would
+        make a fresh deployment unusable before it was even configured."""
+        response = self.login()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['email'], "hod@ncit.edu.np")
+
+    @patch('main_app.api.auth.requests.post')
+    def test_a_configured_captcha_is_enforced(self, post):
+        """And once a secret IS set, a login without a valid token is
+        refused — the check is off by absence, never by accident."""
+        post.return_value.text = '{"success": false}'
+        with patch('main_app.api.auth.CAPTCHA_SECRET', 'a-real-secret'):
+            response = self.login(captcha="")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Captcha", response.data['detail'])
+        self.assertTrue(post.called, "the token should have been verified")
+
+    @patch('main_app.api.auth.requests.post')
+    def test_a_valid_captcha_token_lets_the_login_through(self, post):
+        post.return_value.text = '{"success": true}'
+        with patch('main_app.api.auth.CAPTCHA_SECRET', 'a-real-secret'):
+            response = self.login(captcha="a-token-google-would-accept")
+        self.assertEqual(response.status_code, 200, response.data)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='erp-slip-tests-'))

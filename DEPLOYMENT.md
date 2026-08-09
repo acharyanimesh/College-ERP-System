@@ -65,6 +65,9 @@ development key and `DEBUG=True`, exactly as before.
    | `EMAIL_HOST_USER` | Gmail address used to send verification mail |
    | `EMAIL_HOST_PASSWORD` | Gmail **app password**, not the account password |
    | `DEFAULT_FROM_EMAIL` | e.g. `College ERP <noreply@yourcollege.edu.np>` |
+   | `DJANGO_SUPERUSER_EMAIL` | your first login — see step 4 |
+   | `DJANGO_SUPERUSER_PASSWORD` | a real password; it is the only account that exists |
+   | `RECAPTCHA_SECRET` | leave **empty** unless you have your own key pair |
 
    You won't know the Vercel URL until step 3 — put a placeholder in, finish
    step 3, then come back and correct both. Django rejects logins from an
@@ -74,18 +77,19 @@ development key and `DEBUG=True`, exactly as before.
    by the blueprint — leave them alone.
 
 4. First deploy runs `build.sh`: installs dependencies, `collectstatic`,
-   `migrate`. The database starts **empty**, so create your first login:
+   `migrate`, and then creates your first login from
+   `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD`.
 
-   Render dashboard → the service → **Shell**:
+   That last step exists because **Render's Shell is a paid feature** — on
+   the free plan there is no way to run `createsuperuser` by hand, and an
+   empty database would leave you with a working app you cannot log into. It
+   runs once and quietly skips on every later deploy.
 
-   ```bash
-   python manage.py createsuperuser
-   ```
-
-   That is a Django superuser for `/django-admin/`. The application's own
-   admin (the `user_type=1` HOD role that the React app logs in as) is a
-   separate thing — create one from `/django-admin/` under **Custom users**,
-   with user type `1`.
+   `user_type` defaults to `1` (HOD), so this one account is both a Django
+   superuser for `/django-admin/` and the application's own admin in the
+   React app. Once you are in, make a second admin through the UI and delete
+   those two environment variables — a password in a dashboard is a password
+   in a dashboard.
 
 5. Check it is alive: `https://<you>.onrender.com/api/v1/auth/me/` should
    answer `401` when logged out. A `401` is success here — it means Django is
@@ -120,6 +124,23 @@ Almost always `DJANGO_CSRF_TRUSTED_ORIGINS`: it must be the bare host
 scheme-qualified form. Note that Vercel gives every preview deployment its
 own subdomain, and those are not covered — add `.vercel.app` (with the
 leading dot, matching all subdomains) if you want previews to work too.
+
+### reCAPTCHA is off by default, deliberately
+
+The login page's captcha is enforced only when `RECAPTCHA_SECRET` is set on
+Render **and** `VITE_RECAPTCHA_SITE_KEY` is set on Vercel. They are two
+halves of one key pair and are useless apart.
+
+It used to switch itself on whenever `DEBUG` was off — which is to say, the
+moment you deployed — using a key pair hardcoded in the source and
+registered to domains this deployment does not own. The widget would have
+refused to render, the token would have been empty, and every login would
+have been rejected with "Invalid Captcha", including yours.
+
+To turn it on: register a pair at
+<https://www.google.com/recaptcha/admin> (reCAPTCHA **v2 "I'm not a robot"**),
+list your Vercel domain under *Domains*, then set both variables and
+redeploy. Leave them unset and the login page simply has no captcha on it.
 
 ---
 
