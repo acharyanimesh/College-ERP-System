@@ -32,6 +32,14 @@ const dashboardAPI = {
   librarianHome() {
     return axiosClient.get("/dashboard/librarian/");
   },
+
+  /**
+   * Accountant dashboard: collections, what is outstanding, who is overdue.
+   * Also readable by an admin (oversight), who gets the same figures.
+   */
+  accountantHome() {
+    return axiosClient.get("/dashboard/accountant/");
+  },
 };
 
 export default dashboardAPI;

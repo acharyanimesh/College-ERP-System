@@ -5,9 +5,14 @@ from django.core.validators import (
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.db import models
-from django.db.models import Q
+from django.db.models import (
+    DecimalField, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum, Value)
+from django.db.models.functions import Cast, Coalesce
 from django.contrib.auth.models import AbstractUser
-from datetime import datetime,timedelta
+from datetime import date,datetime,timedelta
+from decimal import Decimal
+import os
+import uuid
 
 
 # Every course runs in both a Morning and a Day shift. A student belongs to one
@@ -83,7 +88,8 @@ class Session(models.Model):
 
 
 class CustomUser(AbstractUser):
-    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"), (4, "Librarian"))
+    USER_TYPE = ((1, "HOD"), (2, "Staff"), (3, "Student"), (4, "Librarian"),
+                 (5, "Accountant"))
     GENDER = [("M", "Male"), ("F", "Female")]
     
     
@@ -343,6 +349,28 @@ class Librarian(models.Model):
     librarian_id = models.CharField(
         max_length=6, null=True, blank=True, unique=True,
         validators=[RegexValidator(r'^\d{6}$', 'Librarian ID must be exactly 6 digits')])
+    admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.admin.first_name + " " + self.admin.last_name
+
+
+class Accountant(models.Model):
+    """The college accounts office: bills the fees, takes the money and
+    answers for the ledger.
+
+    Its own role rather than a permission on Admin, for the same reason
+    Librarian is: whoever handles money should not also be the person who can
+    create, edit and delete the student the money is attached to. The admin
+    keeps read-only oversight (see api/permissions.IsAccountantOrAdmin) —
+    they can see every rupee, and move none of it.
+    """
+    # Drawn from the same per-year counter as Staff.staff_id and
+    # Librarian.librarian_id — see idgen. One employee, one number, whichever
+    # of the three roles they hold.
+    accountant_id = models.CharField(
+        max_length=6, null=True, blank=True, unique=True,
+        validators=[RegexValidator(r'^\d{6}$', 'Accountant ID must be exactly 6 digits')])
     admin = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -754,6 +782,600 @@ class ResultFinalization(models.Model):
         unique_together = ('course', 'subject', 'semester')
 
 
+# --------------------------------------------------------------------------
+# Fees
+#
+# Deliberately the same shape as the library's fine ledger above: what somebody
+# owes is DERIVED from rows that each explain themselves, and every row
+# recording money that changed hands is append-only (see ImmutableRecord).
+#
+#   FeeHead             "Tuition", "Exam", "Lab" — the college's chart of fees
+#   FeeStructure        what one (course, session, semester) costs
+#     └ FeeStructureItem    one head and its amount on that structure
+#   FeeInvoice          one student's bill for one semester
+#     ├ FeeInvoiceLine      the structure's items, SNAPSHOT at issue time
+#     ├ FeeAdjustment       scholarship / waiver / late fine     [append-only]
+#     └ FeePayment          a receipt                            [append-only]
+#   PaymentAttempt      one handshake with an online payment gateway
+#
+# A balance is never stored. A stored balance means two places can disagree
+# about what a student owes, and the one that is wrong is the one somebody
+# reads out at the counter.
+# --------------------------------------------------------------------------
+
+# Fees carry paisa — a percentage scholarship on a Rs. 47,500 tuition alone
+# guarantees it — so they are Decimal, unlike LibraryFine.amount, which is a
+# whole number of rupees because that fine is a flat per-day rate. Never
+# float: a rounding drift in a ledger is one somebody has to explain.
+MONEY = {'max_digits': 10, 'decimal_places': 2}
+ZERO = Decimal('0.00')
+# Wider than MONEY: these hold sums over many rows, not one row's amount.
+_TOTAL_FIELD = DecimalField(max_digits=14, decimal_places=2)
+_ZERO_TOTAL = Value(ZERO, output_field=_TOTAL_FIELD)
+
+
+def money(amount):
+    """Wrap `amount` so it can be COMPARED against a computed money column.
+
+    Django's SQLite backend binds every Decimal parameter as text
+    (`Database.register_adapter(decimal.Decimal, str)`), and SQLite sorts
+    every number below every string — so a plain
+
+        .filter(total_balance__gt=Decimal('0.00'))
+
+    is false however much is owed, silently and with no error to notice.
+    Casting the literal back to a number restores the comparison; on
+    Postgres the cast is a no-op, so this stays correct if a tenant moves
+    (see the database-per-tenant plan).
+
+    Only needed for comparisons against an ANNOTATED total. Filtering a
+    stored column — FeePayment.amount and the like — goes through the
+    field's own adapter and is fine.
+    """
+    return Cast(Value(amount, output_field=_TOTAL_FIELD), _TOTAL_FIELD)
+
+# How long after issue a bill falls due, when the structure doesn't say.
+DEFAULT_FEE_DUE_DAYS = 30
+
+
+class FeeHead(models.Model):
+    """A line a college bills under — Tuition, Admission, Exam, Library
+    Deposit.
+
+    A master table rather than free text on each structure, so "how much
+    tuition did we collect this session?" is a query instead of a string
+    match across every structure the college has ever written.
+    """
+    name = models.CharField(max_length=80, unique=True)
+    code = models.CharField(max_length=20, blank=True, default="")
+    description = models.CharField(max_length=200, blank=True, default="")
+    # Charged every semester (tuition) as opposed to once at admission.
+    recurring = models.BooleanField(default=True)
+    # Refundable deposits are money the college is holding, not money it has
+    # earned. Reports keep them apart.
+    refundable = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class FeeStructure(models.Model):
+    """What one (course, session, semester) costs.
+
+    A template, not a bill: editing a structure changes what the NEXT invoice
+    run charges and never touches a bill already issued — FeeInvoiceLine
+    copies the amounts at issue time precisely so a mid-session correction
+    can't silently rewrite what a student was told to pay.
+    """
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    session = models.ForeignKey(Session, on_delete=models.CASCADE)
+    semester = models.PositiveSmallIntegerField()
+    # Days from issue to the due date, stamped onto each invoice this
+    # structure raises.
+    due_days = models.PositiveSmallIntegerField(default=DEFAULT_FEE_DUE_DAYS)
+    # What a day past the due date costs, applied by the overdue sweep as a
+    # FeeAdjustment. Zero means this college doesn't fine late fees.
+    late_fine_per_day = models.DecimalField(default=ZERO, **MONEY)
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('course', 'session', 'semester')
+        ordering = ['course', 'session', 'semester']
+
+    def __str__(self):
+        return "%s — Sem %d (%s)" % (
+            self.course.short_name if self.course else '?', self.semester,
+            self.session)
+
+    @property
+    def total(self):
+        return sum((item.amount for item in self.items.all()), ZERO)
+
+
+class FeeStructureItem(models.Model):
+    """One head and its amount on a structure."""
+    structure = models.ForeignKey(
+        FeeStructure, on_delete=models.CASCADE, related_name='items')
+    # PROTECT: a head that has been billed under must stay explicable.
+    head = models.ForeignKey(FeeHead, on_delete=models.PROTECT)
+    amount = models.DecimalField(**MONEY)
+
+    class Meta:
+        unique_together = ('structure', 'head')
+        ordering = ['head__name']
+
+    def __str__(self):
+        return "%s · %s" % (self.head, self.amount)
+
+
+class FeeInvoiceQuerySet(models.QuerySet):
+    def with_totals(self):
+        """Annotate total_gross, total_adjustments, total_paid, total_balance —
+        in SQL, what FeeInvoice's gross/adjustment_total/paid/balance
+        properties work out in Python.
+
+        Three subqueries rather than three Sums over joins: joined aggregates
+        multiply each other's rows, so an invoice with two lines and two
+        payments would report double of both. Anything that filters on what
+        is owed — the reminder sweep, the defaulter list — has to come
+        through here.
+
+        The total_ prefix keeps these clear of the properties of the same
+        meaning: an annotation whose name matched one would be assigned onto
+        the instance over it, and a property has no setter to assign to.
+        """
+        def _sum_of(model, field='amount'):
+            # Resolved when the method runs, so the models defined further
+            # down this file are available by then.
+            rows = (model.objects
+                    .filter(invoice=OuterRef('pk'))
+                    .values('invoice')
+                    .annotate(total=Sum(field))
+                    .values('total'))
+            return Coalesce(
+                Subquery(rows, output_field=_TOTAL_FIELD), _ZERO_TOTAL)
+
+        return self.annotate(
+            total_gross=_sum_of(FeeInvoiceLine),
+            total_adjustments=_sum_of(FeeAdjustment),
+            total_paid=_sum_of(FeePayment),
+        ).annotate(
+            total_balance=ExpressionWrapper(
+                F('total_gross') + F('total_adjustments') - F('total_paid'),
+                output_field=_TOTAL_FIELD))
+
+    def outstanding(self):
+        """Live bills with money still on them."""
+        return self.with_totals().filter(
+            cancelled_at__isnull=True, total_balance__gt=money(ZERO))
+
+    def overdue(self, on=None):
+        """Outstanding bills whose due date has already passed."""
+        return self.outstanding().filter(due_date__lt=on or date.today())
+
+    def due_in(self, days, on=None):
+        """Outstanding bills falling due EXACTLY `days` from now.
+
+        Exactly, not "within" — as with the library's due-soon sweep, a bill
+        due in a week should produce one reminder on one day, not a fresh one
+        every morning until it is due.
+        """
+        return self.outstanding().filter(
+            due_date=(on or date.today()) + timedelta(days=days))
+
+
+class FeeInvoice(models.Model):
+    """One student's bill for one semester.
+
+    course/session/semester are copied here rather than read off the student,
+    for the same reason StudentResult carries its own semester: the student
+    moves on, and last year's bill has to keep saying what it was for.
+    """
+    # PROTECT throughout the fee models, as in LibraryFine: nothing a
+    # financial record points at may be deleted out from under it.
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='fee_invoices')
+    course = models.ForeignKey(Course, on_delete=models.PROTECT)
+    session = models.ForeignKey(Session, on_delete=models.PROTECT)
+    semester = models.PositiveSmallIntegerField()
+    # Which semesterly bill this is, for colleges that split a semester into
+    # instalments. Defaults to 1 and is what keeps the invoice run idempotent
+    # (see the unique constraint) without ruling instalments out later.
+    instalment = models.PositiveSmallIntegerField(default=1)
+    # Informational — which template raised it. The LINES are the record of
+    # what was charged; this only says where they came from.
+    structure = models.ForeignKey(
+        FeeStructure, null=True, blank=True, on_delete=models.SET_NULL)
+
+    number = models.CharField(max_length=24, unique=True)
+    issued_date = models.DateField()
+    due_date = models.DateField()
+
+    # A cancelled bill stays on the record with its reason attached — a
+    # withdrawn charge is a thing that happened, not a thing to delete.
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='cancelled_invoices')
+    cancel_reason = models.TextField(blank=True, default="")
+
+    issued_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='issued_invoices')
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FeeInvoiceQuerySet.as_manager()
+
+    # Derived states, in the order they're checked by `status`.
+    CANCELLED, PAID, OVERDUE, PARTIAL, DUE = (
+        'cancelled', 'paid', 'overdue', 'partial', 'due')
+
+    class Meta:
+        ordering = ['-issued_date', '-id']
+        constraints = [
+            # Re-running the invoice run for a class must not double-bill
+            # anybody, and the database is the right place to say so rather
+            # than whichever view remembers to check.
+            models.UniqueConstraint(
+                fields=['student', 'session', 'semester', 'instalment'],
+                name='one_invoice_per_student_semester'),
+        ]
+
+    def __str__(self):
+        return "%s · %s · Sem %d" % (self.number, self.student, self.semester)
+
+    # -- Money. Each is a plain sum so a single invoice explains itself
+    # without the annotations above; use with_totals() for querying in bulk.
+    @property
+    def gross(self):
+        """What the structure charged, before anything was done about it."""
+        return sum((line.amount for line in self.lines.all()), ZERO)
+
+    @property
+    def adjustment_total(self):
+        """Signed: a late fine adds, a scholarship takes away."""
+        return sum((adj.amount for adj in self.adjustments.all()), ZERO)
+
+    @property
+    def payable(self):
+        return self.gross + self.adjustment_total
+
+    @property
+    def paid(self):
+        return sum((p.amount for p in self.payments.all()), ZERO)
+
+    @property
+    def balance(self):
+        """What the student still owes. Never stored — see the section note."""
+        return self.payable - self.paid
+
+    @property
+    def is_cancelled(self):
+        return self.cancelled_at is not None
+
+    @property
+    def days_overdue(self):
+        if self.is_cancelled or self.balance <= ZERO or not self.due_date:
+            return 0
+        return max((datetime.today().date() - self.due_date).days, 0)
+
+    @property
+    def status(self):
+        if self.is_cancelled:
+            return self.CANCELLED
+        if self.balance <= ZERO:
+            return self.PAID
+        if self.days_overdue:
+            return self.OVERDUE
+        return self.PARTIAL if self.paid > ZERO else self.DUE
+
+
+class FeeInvoiceLine(models.Model):
+    """One charge on a bill, snapshotted from the structure at issue time.
+
+    head_name is stored beside the FK for the same reason LibraryFine keeps
+    collected_by_name: the FK is for querying, the text is so the bill still
+    reads correctly after the head is renamed.
+    """
+    invoice = models.ForeignKey(
+        FeeInvoice, on_delete=models.CASCADE, related_name='lines')
+    head = models.ForeignKey(
+        FeeHead, null=True, blank=True, on_delete=models.PROTECT)
+    head_name = models.CharField(max_length=80)
+    amount = models.DecimalField(**MONEY)
+
+    class Meta:
+        ordering = ['head_name']
+
+    def __str__(self):
+        return "%s · %s" % (self.head_name, self.amount)
+
+
+class FeeAdjustment(ImmutableRecord):
+    """Something that changed what a bill comes to, after it was issued.
+
+    Append-only, and signed: POSITIVE adds to what is owed (a late fine),
+    NEGATIVE takes away (a scholarship, a waiver). A mistake is corrected by
+    writing the opposite adjustment, never by editing this row — which is
+    what lets the invoice show not just the number but how it got there.
+    """
+    SCHOLARSHIP = 'scholarship'
+    DISCOUNT = 'discount'
+    WAIVER = 'waiver'
+    LATE_FINE = 'late_fine'
+    CORRECTION = 'correction'
+    KIND_CHOICES = (
+        (SCHOLARSHIP, 'Scholarship'),
+        (DISCOUNT, 'Discount'),
+        (WAIVER, 'Waiver'),
+        (LATE_FINE, 'Late fine'),
+        (CORRECTION, 'Correction'),
+    )
+    # The kinds that may only ever reduce a bill. LATE_FINE may only add;
+    # CORRECTION goes either way, which is what makes it a correction.
+    CREDIT_KINDS = (SCHOLARSHIP, DISCOUNT, WAIVER)
+
+    invoice = models.ForeignKey(
+        FeeInvoice, on_delete=models.PROTECT, related_name='adjustments')
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    amount = models.DecimalField(
+        help_text="Positive adds to the bill, negative reduces it.", **MONEY)
+    reason = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='fee_adjustments')
+    created_by_name = models.CharField(max_length=150, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return "%s · %s %s" % (self.invoice.number, self.get_kind_display(),
+                               self.amount)
+
+
+class FeePayment(ImmutableRecord):
+    """The receipt for money received against a bill.
+
+    Append-only for the same reason LibraryFine is: money changed hands in the
+    real world, and this row is the record of that. A mistake is corrected by
+    a second, offsetting record — never by editing or deleting this one.
+
+    Both portals read these rows: the student sees their own receipts, the
+    accounts office sees every receipt taken.
+    """
+    CASH = 'cash'
+    CHEQUE = 'cheque'
+    BANK = 'bank'
+    ONLINE = 'online'
+    MODE_CHOICES = (
+        (CASH, 'Cash at counter'),
+        (CHEQUE, 'Cheque'),
+        (BANK, 'Bank deposit'),
+        (ONLINE, 'Online payment'),
+    )
+
+    invoice = models.ForeignKey(
+        FeeInvoice, on_delete=models.PROTECT, related_name='payments')
+    # Denormalised from the invoice so "this student's receipts" is one query,
+    # exactly as LibraryFine.student is.
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='fee_payments')
+    receipt_no = models.CharField(max_length=24, unique=True)
+    amount = models.DecimalField(**MONEY)
+    mode = models.CharField(max_length=8, choices=MODE_CHOICES, default=CASH)
+    # The gateway handshake this receipt came out of, for online payments.
+    # OneToOne, so one successful attempt can be credited exactly once — a
+    # structural guard against a replayed callback, on top of the unique
+    # (gateway, gateway_ref) on PaymentAttempt itself.
+    attempt = models.OneToOneField(
+        'PaymentAttempt', null=True, blank=True, on_delete=models.PROTECT,
+        related_name='payment')
+    # Cheque number, bank voucher number or gateway reference — whatever the
+    # counter would write in the register beside this receipt.
+    reference = models.CharField(max_length=100, blank=True, default="")
+    received_on = models.DateField()
+    # FK to query by, name so who took the money survives the account being
+    # removed. Null for an online payment: nobody took it.
+    collected_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='fees_collected')
+    collected_by_name = models.CharField(max_length=150, blank=True, default="")
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return "%s · %s · %s (%s)" % (
+            self.receipt_no, self.student, self.amount, self.mode)
+
+
+class PaymentAttempt(models.Model):
+    """One handshake with an online gateway.
+
+    Kept apart from FeePayment on purpose: most of what happens here is
+    students changing their minds, gateways timing out and callbacks arriving
+    twice, and none of that belongs in a receipt ledger. A FeePayment comes
+    into existence only once an attempt has been verified server-to-server —
+    never from what the browser came back holding.
+
+    Unlike the receipt, this row is meant to move: it is the one part of the
+    fee system that is a state machine rather than a record.
+    """
+    ESEWA = 'esewa'
+    KHALTI = 'khalti'
+    SANDBOX = 'sandbox'
+    GATEWAY_CHOICES = (
+        (ESEWA, 'eSewa'),
+        (KHALTI, 'Khalti'),
+        # No credentials, always succeeds. Lets the whole flow be exercised
+        # in development, the way EMAIL_BACKEND falls back to the console.
+        (SANDBOX, 'Sandbox (development)'),
+    )
+
+    INITIATED = 'initiated'
+    SUCCEEDED = 'succeeded'
+    FAILED = 'failed'
+    EXPIRED = 'expired'
+    STATUS_CHOICES = (
+        (INITIATED, 'Initiated'),
+        (SUCCEEDED, 'Succeeded'),
+        (FAILED, 'Failed'),
+        # Nothing came back and the reconciliation sweep gave up on it.
+        (EXPIRED, 'Expired'),
+    )
+    # Nothing more will happen to an attempt in one of these.
+    FINAL_STATUSES = (SUCCEEDED, FAILED, EXPIRED)
+
+    invoice = models.ForeignKey(
+        FeeInvoice, on_delete=models.PROTECT, related_name='payment_attempts')
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='payment_attempts')
+    # Ours, generated at initiation and handed to the gateway as the order id.
+    # This is what the verification call looks the attempt back up by, so it
+    # must not be guessable from the invoice number.
+    reference = models.CharField(max_length=36, unique=True)
+    gateway = models.CharField(max_length=10, choices=GATEWAY_CHOICES)
+    # Theirs, learnt on the callback. Blank until then.
+    gateway_ref = models.CharField(max_length=100, blank=True, default="")
+    # Fixed at initiation from the invoice the server looked up — never from
+    # what the browser posted, which is the whole point of doing it here.
+    amount = models.DecimalField(**MONEY)
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=INITIATED,
+        db_index=True)
+    # The gateway's verification response, kept verbatim. When a payment is
+    # disputed months later this is the only thing that can settle it.
+    payload = models.JSONField(default=dict, blank=True)
+    failure_reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            # A gateway reference is credited once and once only. A callback
+            # that arrives twice — and they do — hits this instead of paying
+            # the bill down twice. Conditional so the many attempts still
+            # waiting on a reference don't collide on the empty string.
+            models.UniqueConstraint(
+                fields=['gateway', 'gateway_ref'],
+                condition=~Q(gateway_ref=''),
+                name='one_attempt_per_gateway_reference'),
+        ]
+
+    def __str__(self):
+        return "%s · %s · %s (%s)" % (
+            self.reference, self.gateway, self.amount, self.status)
+
+    @property
+    def is_final(self):
+        return self.status in self.FINAL_STATUSES
+
+
+def deposit_slip_path(instance, filename):
+    """Where an uploaded slip lands.
+
+    The client's filename decides only the extension — the rest is ours. A
+    student-uploaded name is untrusted input, and this is the one place in the
+    system where a file arrives from outside the staffroom.
+    """
+    extension = os.path.splitext(filename)[1].lower()[:10]
+    return "deposit_slips/%s/%s%s" % (
+        datetime.today().strftime('%Y/%m'), uuid.uuid4().hex, extension)
+
+
+class DepositSlip(models.Model):
+    """A student's claim that they paid a bill into the college's bank.
+
+    The slip is NOT a payment. It is a claim, and the FeePayment only comes
+    into existence when somebody at the accounts office has looked at the
+    image beside the bank statement and said yes — the same rule the gateway
+    flow follows, where a PaymentAttempt becomes a receipt only after a
+    server-to-server verification. What the student types here is evidence,
+    never a ledger entry.
+
+    Like PaymentAttempt and unlike FeePayment, this row is a state machine and
+    is meant to move.
+    """
+    PENDING = 'pending'
+    VERIFIED = 'verified'
+    REJECTED = 'rejected'
+    STATUS_CHOICES = (
+        (PENDING, 'Awaiting verification'),
+        (VERIFIED, 'Verified'),
+        (REJECTED, 'Rejected'),
+    )
+
+    invoice = models.ForeignKey(
+        FeeInvoice, on_delete=models.PROTECT, related_name='deposit_slips')
+    # Denormalised exactly as FeePayment.student is, so "my slips" is one
+    # query and stays answerable if the invoice is later cancelled.
+    student = models.ForeignKey(
+        Student, on_delete=models.PROTECT, related_name='deposit_slips')
+    amount = models.DecimalField(**MONEY)
+    deposited_on = models.DateField()
+    bank_name = models.CharField(max_length=100)
+    # The voucher or deposit-slip number, which is what the office matches
+    # against the bank statement.
+    reference = models.CharField(max_length=100)
+    image = models.FileField(upload_to=deposit_slip_path)
+    note = models.TextField(blank=True, default="")
+
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default=PENDING, db_index=True)
+    # The receipt this slip turned into. OneToOne, so a slip can be credited
+    # exactly once however many times the verify button is pressed — the same
+    # structural guard PaymentAttempt gets from FeePayment.attempt.
+    payment = models.OneToOneField(
+        FeePayment, null=True, blank=True, on_delete=models.PROTECT,
+        related_name='deposit_slip')
+    # FK to query by, name so the reviewer survives the account being removed.
+    reviewed_by = models.ForeignKey(
+        Accountant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='slips_reviewed')
+    reviewed_by_name = models.CharField(max_length=150, blank=True, default="")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    # Why it was rejected. Required on rejection: a student whose money the
+    # college says it cannot see is owed a reason it can act on.
+    review_note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            # The same slip cannot be submitted against the same bill twice —
+            # the common case being an impatient student pressing upload again
+            # rather than anything dishonest. Scoped to live rows so a
+            # rejected slip can be corrected and resubmitted.
+            models.UniqueConstraint(
+                fields=['invoice', 'reference'],
+                condition=~Q(status='rejected'),
+                name='one_live_slip_per_invoice_reference'),
+        ]
+
+    def __str__(self):
+        return "%s · %s · %s (%s)" % (
+            self.reference, self.student, self.amount, self.status)
+
+    @property
+    def is_pending(self):
+        return self.status == self.PENDING
+
+
 @receiver(post_save, sender=CustomUser)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
@@ -767,6 +1389,8 @@ def create_user_profile(sender, instance, created, **kwargs):
             Student.objects.create(admin=instance)
         if user_type == '4':
             Librarian.objects.create(admin=instance)
+        if user_type == '5':
+            Accountant.objects.create(admin=instance)
 
 
 @receiver(post_save, sender=CustomUser)
@@ -780,5 +1404,7 @@ def save_user_profile(sender, instance, **kwargs):
         instance.student.save()
     if user_type == '4':
         instance.librarian.save()
+    if user_type == '5':
+        instance.accountant.save()
 
 # todos

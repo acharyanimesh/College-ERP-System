@@ -10,7 +10,8 @@ def _uidb64(user):
     return urlsafe_base64_encode(force_bytes(user.pk))
 
 
-ROLE_NAMES = {"2": "Staff", "3": "Student", "4": "Librarian"}
+ROLE_NAMES = {"2": "Staff", "3": "Student", "4": "Librarian",
+              "5": "Accountant"}
 
 
 def send_verification_email(user):

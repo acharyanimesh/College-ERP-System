@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from django.db.models import F
 
 from ..emails import send_verification_email
+from ..fee_billing import bill_active_cohorts
 from ..forms import StudentForm
 from ..idgen import (
     assign_student_numbers, batch_lock_state, lock_batches_for_course,
@@ -255,12 +256,27 @@ def promote_class(request, course_id):
     with transaction.atomic():
         promoted, graduated = _cascade_promote_course(course, semester)
 
+    # Bill the cohorts at their new semesters. Outside the promotion
+    # transaction and deliberately forgiving: a cohort with no fee structure
+    # written yet is simply not billed, because an academic promotion must
+    # not fail on the accounts office's paperwork. Nothing is lost either
+    # way — the run is idempotent, so the accountant's own invoice run picks
+    # up whatever this missed.
+    billed = 0
+    if promoted:
+        try:
+            billed = bill_active_cohorts(course)
+        except Exception:
+            billed = 0
+
     parts = []
     if promoted:
         parts.append("promoted %d student(s) (Semester %d and above moved up one)"
                      % (promoted, semester))
     if graduated:
         parts.append("marked %d final-semester student(s) as passed out" % graduated)
+    if billed:
+        parts.append("raised %d fee invoice(s) for the new semester" % billed)
     if parts:
         detail = ("In %s: " % course.short_name) + "; ".join(parts) + "."
     else:

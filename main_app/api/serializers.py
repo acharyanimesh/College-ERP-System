@@ -294,6 +294,205 @@ def librarian_detail(librarian):
     return data
 
 
+def accountant_row(accountant):
+    user = accountant.admin
+    return {
+        'id': accountant.id,
+        'user_id': user.id,
+        'accountant_id': accountant.accountant_id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'verified': user.email_verified,
+    }
+
+
+def accountant_detail(accountant):
+    """Accountant Details page + Edit Accountant form initial values."""
+    user = accountant.admin
+    data = accountant_row(accountant)
+    data.update({
+        'phone_number': user.phone_number,
+        'date_of_birth': user.date_of_birth.isoformat() if user.date_of_birth else '',
+        'gender': user.gender,
+        'gender_display': user.get_gender_display(),
+        'address': user.address,
+        'address_line1': user.address_line1,
+        'address_line2': user.address_line2,
+        'city': user.city,
+        'province': user.province,
+        'profile_pic': user.profile_pic.url if user.profile_pic else '',
+    })
+    return data
+
+
+# ------------------------------------------------------------------- Fees
+
+def fee_head_dict(head):
+    return {
+        'id': head.id,
+        'name': head.name,
+        'code': head.code,
+        'description': head.description,
+        'recurring': head.recurring,
+        'refundable': head.refundable,
+    }
+
+
+def fee_structure_dict(structure, with_items=True):
+    data = {
+        'id': structure.id,
+        'course': structure.course_id,
+        'course_name': structure.course.short_name if structure.course else '—',
+        'session': structure.session_id,
+        'session_name': str(structure.session) if structure.session else '—',
+        'semester': structure.semester,
+        'due_days': structure.due_days,
+        'late_fine_per_day': structure.late_fine_per_day,
+        'note': structure.note,
+        'total': structure.total,
+    }
+    if with_items:
+        data['items'] = [
+            {
+                'id': item.id,
+                'head': item.head_id,
+                'head_name': item.head.name,
+                'amount': item.amount,
+            }
+            for item in structure.items.all()
+        ]
+    return data
+
+
+def fee_invoice_dict(invoice, detail=False, for_office=False):
+    """One bill.
+
+    `detail` adds the line-by-line breakdown and the history behind the
+    balance; `for_office` adds who it belongs to, which the student's own
+    view has no use for.
+    """
+    data = {
+        'id': invoice.id,
+        'number': invoice.number,
+        'semester': invoice.semester,
+        'instalment': invoice.instalment,
+        'course_name': invoice.course.short_name if invoice.course else '—',
+        'session_name': str(invoice.session) if invoice.session else '—',
+        'issued_date': invoice.issued_date.isoformat(),
+        'due_date': invoice.due_date.isoformat(),
+        'gross': invoice.gross,
+        'adjustment_total': invoice.adjustment_total,
+        'payable': invoice.payable,
+        'paid': invoice.paid,
+        'balance': invoice.balance,
+        'status': invoice.status,
+        'days_overdue': invoice.days_overdue,
+        'is_cancelled': invoice.is_cancelled,
+        'cancel_reason': invoice.cancel_reason,
+    }
+    if for_office:
+        student = invoice.student
+        user = student.admin
+        data.update({
+            'student_id': student.id,
+            'student_name': ("%s %s" % (user.first_name, user.last_name)).strip(),
+            'student_roll': student.roll_number or '',
+            'student_email': user.email,
+        })
+    if detail:
+        data.update({
+            'lines': [
+                {'id': l.id, 'head_name': l.head_name, 'amount': l.amount}
+                for l in invoice.lines.all()],
+            'adjustments': [
+                {
+                    'id': a.id,
+                    'kind': a.kind,
+                    'kind_display': a.get_kind_display(),
+                    'amount': a.amount,
+                    'reason': a.reason,
+                    'created_by_name': a.created_by_name,
+                    'created_at': a.created_at.strftime('%b. %d, %Y'),
+                }
+                for a in invoice.adjustments.all()],
+            'payments': [fee_payment_dict(p) for p in invoice.payments.all()],
+        })
+    return data
+
+
+def fee_payment_dict(payment, for_office=False):
+    """One receipt. Read-only by nature — written once and never revised, so
+    as with library_fine_dict there is no matching input shape."""
+    data = {
+        'id': payment.id,
+        'receipt_no': payment.receipt_no,
+        'amount': payment.amount,
+        'mode': payment.mode,
+        'mode_display': payment.get_mode_display(),
+        'reference': payment.reference,
+        'received_on': payment.received_on.isoformat(),
+        'note': payment.note,
+        # The snapshot, not the FK: who took the money has to stay legible
+        # after the account that took it is gone.
+        'collected_by_name': payment.collected_by_name,
+        'invoice_id': payment.invoice_id,
+        'invoice_number': payment.invoice.number,
+    }
+    if for_office:
+        student = payment.student
+        user = student.admin
+        data.update({
+            'student_id': student.id,
+            'student_name': ("%s %s" % (user.first_name, user.last_name)).strip(),
+            'student_roll': student.roll_number or '',
+        })
+    return data
+
+
+def deposit_slip_dict(slip, for_office=False):
+    """One bank-deposit claim, awaiting or past verification.
+
+    The image URL is served to both sides: the office needs it to check the
+    slip against the statement, and the student needs to see what they
+    actually uploaded when the office says it can't be read.
+    """
+    data = {
+        'id': slip.id,
+        'amount': slip.amount,
+        'deposited_on': slip.deposited_on.isoformat(),
+        'bank_name': slip.bank_name,
+        'reference': slip.reference,
+        'image_url': slip.image.url if slip.image else '',
+        'note': slip.note,
+        'status': slip.status,
+        'status_display': slip.get_status_display(),
+        'reviewed_by_name': slip.reviewed_by_name,
+        'reviewed_at': (slip.reviewed_at.strftime('%b. %d, %Y')
+                        if slip.reviewed_at else None),
+        'review_note': slip.review_note,
+        'submitted_at': slip.created_at.strftime('%b. %d, %Y'),
+        'invoice_id': slip.invoice_id,
+        'invoice_number': slip.invoice.number,
+        # Present once verified, so both sides can jump straight to the
+        # receipt the slip turned into.
+        'payment_id': slip.payment_id,
+        'receipt_no': slip.payment.receipt_no if slip.payment_id else '',
+    }
+    if for_office:
+        student = slip.student
+        user = student.admin
+        data.update({
+            'student_id': student.id,
+            'student_name': ("%s %s" % (user.first_name, user.last_name)).strip(),
+            'student_roll': student.roll_number or '',
+            # What the bill still owes, so the desk can see at a glance
+            # whether the claimed amount is even possible.
+            'invoice_balance': slip.invoice.balance,
+        })
+    return data
+
+
 def subject_dict(subject):
     return {
         'id': subject.id,

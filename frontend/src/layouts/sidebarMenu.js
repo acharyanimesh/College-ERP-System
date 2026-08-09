@@ -50,6 +50,8 @@ export const ADMIN_MENU = [
       { text: "Passed Out Students", icon: "fas fa-user-graduate", to: "/student/passed-out/", active: ["passed-out"] },
       { text: "Add Librarian", icon: "fas fa-book-reader", to: "/librarian/add" },
       { text: "Manage Librarians", icon: "fas fa-address-book", to: "/librarian/manage/", active: ["/librarian/edit/", "/librarian/details/"] },
+      { text: "Add Accountant", icon: "fas fa-user-tie", to: "/accountant/add" },
+      { text: "Manage Accountants", icon: "fas fa-file-invoice-dollar", to: "/accountant/manage/", active: ["/accountant/edit/", "/accountant/details/"] },
     ],
   },
   {
@@ -57,6 +59,19 @@ export const ADMIN_MENU = [
     items: [
       { text: "Notify Staff", icon: "fas fa-bell", to: "/admin_notify_staff" },
       { text: "Notify Students", icon: "fas fa-bullhorn", to: "/admin_notify_student" },
+    ],
+  },
+  {
+    title: "Fees & Accounts",
+    items: [
+      // Read-only oversight: the admin sees every rupee and moves none of it
+      // (the API enforces that, not this menu). Billing and collection live
+      // in the accountant's own portal.
+      { text: "Accounts Overview", icon: "fas fa-file-invoice-dollar", to: "/accountant/home/" },
+      { text: "Fee Invoices", icon: "fas fa-receipt", to: "/accountant/fees/invoices/" },
+      { text: "Fee Collections", icon: "fas fa-hand-holding-usd", to: "/accountant/fees/payments/" },
+      { text: "Bank Deposits", icon: "fas fa-university", to: "/accountant/fees/slips/" },
+      { text: "Fee Structures", icon: "fas fa-sitemap", to: "/accountant/fees/structures/" },
     ],
   },
   {
@@ -141,6 +156,16 @@ export const STUDENT_MENU = [
     ],
   },
   {
+    title: "Fees",
+    items: [
+      // Receipts sit outside /student/fees/ rather than under it: the active
+      // rule below is a substring match, so a nested path would light up both
+      // entries at once.
+      { text: "My Fees", icon: "fas fa-file-invoice-dollar", to: "/student/fees/", active: ["/student/fees/"] },
+      { text: "My Receipts", icon: "fas fa-receipt", to: "/student/receipts/", active: ["/student/receipts/"] },
+    ],
+  },
+  {
     title: "Communication",
     items: [
       { text: "Notifications", icon: "fas fa-bell", to: "/student/view/notification/" },
@@ -175,10 +200,55 @@ export const LIBRARIAN_MENU = [
   },
 ];
 
+export const ACCOUNTANT_MENU = [
+  {
+    title: "Main",
+    items: [
+      { text: "Dashboard", icon: "fas fa-tachometer-alt", to: "/accountant/home/" },
+      { text: "Profile", icon: "fas fa-user-circle", to: "/accountant/view/profile/", navIcon: false },
+    ],
+  },
+  {
+    title: "Billing",
+    items: [
+      { text: "Raise Invoices", icon: "fas fa-file-invoice", to: "/accountant/fees/run/" },
+      {
+        text: "Fee Invoices",
+        icon: "fas fa-receipt",
+        to: "/accountant/fees/invoices/",
+        active: ["/accountant/fees/invoices/"],
+      },
+    ],
+  },
+  {
+    title: "Collection",
+    items: [
+      // First in this group and highest in the portal after billing: on a
+      // busy day this is the only screen the desk opens.
+      { text: "Collect Payment", icon: "fas fa-hand-holding-usd", to: "/accountant/fees/collect/" },
+      { text: "Bank Deposits", icon: "fas fa-university", to: "/accountant/fees/slips/" },
+      { text: "Collections", icon: "fas fa-cash-register", to: "/accountant/fees/payments/" },
+    ],
+  },
+  {
+    title: "Fee Setup",
+    items: [
+      { text: "Fee Heads", icon: "fas fa-list-ul", to: "/accountant/fees/heads/" },
+      {
+        text: "Fee Structures",
+        icon: "fas fa-sitemap",
+        to: "/accountant/fees/structures/",
+        active: ["/accountant/fees/structures/add", "/accountant/fees/structures/edit/"],
+      },
+    ],
+  },
+];
+
 export function menuForUserType(userType) {
   const t = String(userType);
   if (t === "1") return ADMIN_MENU;
   if (t === "2") return STAFF_MENU;
   if (t === "4") return LIBRARIAN_MENU;
+  if (t === "5") return ACCOUNTANT_MENU;
   return STUDENT_MENU;
 }

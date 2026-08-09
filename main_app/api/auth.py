@@ -17,7 +17,8 @@ from rest_framework.response import Response
 from ..emails import send_admin_verification_email, send_email_change_verification
 from ..models import CustomUser
 from ..tokens import email_verification_token
-from .permissions import ADMIN, IsAdmin, LIBRARIAN, STAFF, STUDENT
+from .permissions import (ACCOUNTANT, ADMIN, IsAdmin, LIBRARIAN, STAFF,
+                          STUDENT)
 from .serializers import user_dict
 
 # Admin/HOD shares the college's institutional domain with Staff.
@@ -26,11 +27,13 @@ ROLE_EMAIL_DOMAINS = {
     STAFF: settings.STAFF_ALLOWED_EMAIL_DOMAINS,
     STUDENT: settings.STUDENT_ALLOWED_EMAIL_DOMAINS,
     LIBRARIAN: settings.LIBRARIAN_ALLOWED_EMAIL_DOMAINS,
+    ACCOUNTANT: settings.ACCOUNTANT_ALLOWED_EMAIL_DOMAINS,
 }
 # Roles whose email change an admin has to approve before the verification
 # link goes out (Admin/HOD's own changes skip the gate).
-APPROVAL_REQUIRED_ROLES = (STAFF, STUDENT, LIBRARIAN)
-ROLE_LABELS = {STAFF: 'Staff', STUDENT: 'Student', LIBRARIAN: 'Librarian'}
+APPROVAL_REQUIRED_ROLES = (STAFF, STUDENT, LIBRARIAN, ACCOUNTANT)
+ROLE_LABELS = {STAFF: 'Staff', STUDENT: 'Student', LIBRARIAN: 'Librarian',
+               ACCOUNTANT: 'Accountant'}
 
 # Same domain-bound key doLogin used.
 CAPTCHA_SECRET = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
@@ -217,15 +220,15 @@ def confirm_admin_email_verification(request, uidb64, token):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def request_email_change(request):
-    """Staff/Student/Librarian profile step: submit a new email address.
-    Unlike Admin's flow above, this does NOT email a verification link yet —
-    it only records the request (`pending_email`) for an admin to review at
+    """Non-admin profile step: submit a new email address. Unlike Admin's flow
+    above, this does NOT email a verification link yet — it only records the
+    request (`pending_email`) for an admin to review at
     /auth/admin/email-change-requests/. Approving is what actually sends the
     verification email — see approve_email_change below."""
     user = request.user
     role = str(user.user_type)
     if role not in APPROVAL_REQUIRED_ROLES:
-        return Response({'detail': 'Only Staff/Student/Librarian accounts use this.'},
+        return Response({'detail': 'This account type does not use this flow.'},
                         status=status.HTTP_403_FORBIDDEN)
 
     email = (request.data.get('email') or '').strip().lower()

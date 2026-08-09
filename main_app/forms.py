@@ -224,6 +224,38 @@ class LibrarianForm(CustomUserForm):
         fields = CustomUserForm.Meta.fields + ['phone_number', 'date_of_birth']
 
 
+class AccountantForm(CustomUserForm):
+    allowed_email_domains = settings.ACCOUNTANT_ALLOWED_EMAIL_DOMAINS
+    password_required_on_insert = False
+
+    # accountant_id is deliberately absent, exactly as librarian_id is above:
+    # main_app.idgen issues it on creation and it never changes, so a posted
+    # value is ignored rather than trusted.
+    address_line1 = forms.CharField(required=True, label='Address Line 1')
+    address_line2 = forms.CharField(required=False, label='Address Line 2')
+    city = forms.CharField(required=False, label='City')
+    province = forms.CharField(required=False, label='Province')
+    phone_number = forms.CharField(required=False)
+    date_of_birth = forms.DateField(
+        required=False, widget=DateInput(attrs={'type': 'date'}))
+
+    def __init__(self, *args, **kwargs):
+        super(AccountantForm, self).__init__(*args, **kwargs)
+        self.fields.pop('address', None)
+        if kwargs.get('instance'):
+            admin = kwargs.get('instance').admin
+            self.fields['phone_number'].initial = admin.phone_number
+            self.fields['date_of_birth'].initial = admin.date_of_birth
+            self.fields['address_line1'].initial = admin.address_line1
+            self.fields['address_line2'].initial = admin.address_line2
+            self.fields['city'].initial = admin.city
+            self.fields['province'].initial = admin.province
+
+    class Meta(CustomUserForm.Meta):
+        model = Accountant
+        fields = CustomUserForm.Meta.fields + ['phone_number', 'date_of_birth']
+
+
 class CourseForm(FormSettings):
     def __init__(self, *args, **kwargs):
         super(CourseForm, self).__init__(*args, **kwargs)

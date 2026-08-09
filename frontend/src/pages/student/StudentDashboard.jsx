@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import dashboardAPI from "../../api/dashboard";
 import ThemedChart, { CHART_COLORS } from "../../components/ThemedChart";
+import { formatMoney } from "../../constants/money";
 import { usePageHeader, useMessages } from "../../layouts/Layout";
 
 /**
@@ -112,6 +114,39 @@ function StudentDashboard() {
 
   return (
     <div className="page-container">
+      {/* Fees are a warning here, never a gate — the college's decision is
+          that an unpaid bill doesn't lock a student out of anything. So this
+          banner is the whole enforcement mechanism, and it only appears when
+          there is actually something to say. */}
+      {Number(stats?.fees_outstanding) > 0 && (
+        <div
+          className={`alert ${
+            Number(stats.fees_overdue) > 0 ? "alert-danger" : "alert-warning"
+          } d-flex justify-content-between align-items-center`}
+        >
+          <span>
+            {Number(stats.fees_overdue) > 0 ? (
+              <>
+                <strong>{formatMoney(stats.fees_overdue)}</strong> of your fees
+                is past its due date.
+              </>
+            ) : (
+              <>
+                <strong>{formatMoney(stats.fees_outstanding)}</strong> in fees
+                is outstanding
+                {stats.fees_next_due_date
+                  ? `, next due ${stats.fees_next_due_date}`
+                  : ""}
+                .
+              </>
+            )}
+          </span>
+          <Link to="/student/fees/" className="btn btn-sm btn-outline-primary">
+            View my fees
+          </Link>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="stats-grid">
         <div className="stat-card">

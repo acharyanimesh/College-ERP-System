@@ -1,15 +1,26 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
-from django.test import TestCase
+import shutil
+import tempfile
+
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from .api.library import MAX_OPEN_PER_STUDENT
+from .fee_billing import (NothingToBill, add_adjustment, bill_active_cohorts,
+                          generate_invoices, signed_amount)
 from .idgen import (
     assign_student_numbers, lock_batches_for_course, next_employee_id,
     resequence_cohort)
 from .library_reminders import send_due_soon_reminders
 from .models import (DUE_SOON_REMINDER_DAYS, FINE_PER_DAY, LOAN_PERIOD_DAYS,
-                     RENEWAL_PERIOD_DAYS, Book, BookRequest, Course,
-                     CustomUser, Librarian, LibraryFine, NotificationStudent,
+                     RENEWAL_PERIOD_DAYS, Accountant, Book, BookRequest,
+                     Course, CustomUser, DepositSlip, FeeAdjustment, FeeHead,
+                     FeeInvoice, FeePayment, FeeStructure, FeeStructureItem,
+                     Librarian, LibraryFine, NotificationStudent,
                      RollNumberBatch, Session, Staff, Student)
 
 
@@ -52,9 +63,10 @@ class EmployeeIdTests(TestCase):
         # 250001 belonged to someone; the next hire must not inherit it.
         self.assertEqual(next_employee_id(2025), "250002")
 
-    def test_staff_and_librarians_share_one_counter(self):
+    def test_every_staffroom_role_shares_one_counter(self):
         """An employee ID identifies a person, not a person-within-a-role, so
-        the librarian must not be handed the teacher's number."""
+        neither the librarian nor the accountant may be handed the teacher's
+        number."""
         staff_user = CustomUser.objects.create_user(
             email="teacher@ncit.edu.np", user_type=2)
         staff_user.staff.staff_id = next_employee_id(2025)
@@ -65,9 +77,15 @@ class EmployeeIdTests(TestCase):
         lib_user.librarian.librarian_id = next_employee_id(2025)
         lib_user.librarian.save()
 
+        acc_user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", user_type=5)
+        acc_user.accountant.accountant_id = next_employee_id(2025)
+        acc_user.accountant.save()
+
         self.assertEqual(staff_user.staff.staff_id, "250001")
         self.assertEqual(lib_user.librarian.librarian_id, "250002")
-        self.assertEqual(next_employee_id(2025), "250003")
+        self.assertEqual(acc_user.accountant.accountant_id, "250003")
+        self.assertEqual(next_employee_id(2025), "250004")
 
 
 class LibrarianRoleTests(TestCase):
@@ -79,10 +97,114 @@ class LibrarianRoleTests(TestCase):
         self.assertEqual(user.librarian.admin_id, user.id)
 
     def test_the_other_roles_get_no_librarian_profile(self):
-        for user_type in (1, 2, 3):
+        for user_type in (1, 2, 3, 5):
             CustomUser.objects.create_user(
                 email="u%d@ncit.edu.np" % user_type, user_type=user_type)
         self.assertEqual(Librarian.objects.count(), 0)
+
+
+class AccountantRoleTests(TestCase):
+    def test_creating_a_type_5_user_creates_the_profile(self):
+        user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", user_type=5, first_name="Sabina",
+            last_name="Shrestha")
+        self.assertEqual(Accountant.objects.count(), 1)
+        self.assertEqual(user.accountant.admin_id, user.id)
+
+    def test_the_other_roles_get_no_accountant_profile(self):
+        for user_type in (1, 2, 3, 4):
+            CustomUser.objects.create_user(
+                email="u%d@ncit.edu.np" % user_type, user_type=user_type)
+        self.assertEqual(Accountant.objects.count(), 0)
+
+
+class AccountantApiTests(TestCase):
+    """Who may manage the accounts office, and who may see its dashboard.
+
+    The split this role exists for is the point of these: the admin creates
+    and removes accountants but does not act as one, and nobody else gets
+    near either side.
+    """
+
+    ACCOUNTANT_PAYLOAD = {
+        'first_name': 'Sabina', 'last_name': 'Shrestha',
+        'email': 'sabina@ncit.edu.np', 'gender': 'F',
+        'address_line1': 'Lalitpur',
+    }
+
+    def setUp(self):
+        self.admin = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="pw", user_type=1)
+
+    def make_accountant(self):
+        user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", password="pw", user_type=5,
+            first_name="Sabina", last_name="Shrestha")
+        return user
+
+    def test_admin_creates_an_accountant_with_an_id_it_never_asked_for(self):
+        self.client.force_login(self.admin)
+        response = self.client.post("/api/v1/accountants/",
+                                    self.ACCOUNTANT_PAYLOAD)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['accountant_id'],
+                         "%02d0001" % (date.today().year % 100))
+        created = CustomUser.objects.get(email='sabina@ncit.edu.np')
+        self.assertEqual(str(created.user_type), '5')
+        # Same creation flow as staff/librarians: no usable password, and the
+        # account stays shut until the owner follows the emailed link.
+        self.assertFalse(created.is_active)
+
+    def test_a_posted_accountant_id_is_ignored(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/api/v1/accountants/",
+            dict(self.ACCOUNTANT_PAYLOAD, accountant_id='999999'))
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertNotEqual(response.data['accountant_id'], '999999')
+
+    def test_only_the_admin_may_manage_accountants(self):
+        for user_type, email in ((2, 'staff@ncit.edu.np'),
+                                 (3, 'student@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np'),
+                                 (5, 'acc@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/accountants/").status_code, 403,
+                "user_type %s should not reach the accountant list" % user_type)
+            self.assertEqual(
+                self.client.post("/api/v1/accountants/",
+                                 self.ACCOUNTANT_PAYLOAD).status_code, 403)
+
+    def test_the_accountant_dashboard_is_for_the_accountant_and_the_admin(self):
+        for user in (self.make_accountant(), self.admin):
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/dashboard/accountant/").status_code,
+                200, "user_type %s should reach the accounts dashboard"
+                     % user.user_type)
+
+    def test_no_other_role_sees_the_accounts_dashboard(self):
+        for user_type, email in ((2, 'staff@ncit.edu.np'),
+                                 (3, 'student@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/dashboard/accountant/").status_code,
+                403, "user_type %s should not see the accounts dashboard"
+                     % user_type)
+
+    def test_the_dashboard_reads_zero_before_anything_is_billed(self):
+        self.client.force_login(self.make_accountant())
+        data = self.client.get("/api/v1/dashboard/accountant/").data
+        self.assertEqual(data['invoices_total'], 0)
+        self.assertEqual(data['outstanding_count'], 0)
+        self.assertEqual(data['most_overdue'], [])
+        self.assertEqual(data['recent_payments'], [])
 
 
 class CourseCodeTests(TestCase):
@@ -996,3 +1118,1088 @@ class LibraryReminderTests(TestCase):
         response = self.client.post("/api/v1/library/reminders/send/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['sent'], 1)
+
+
+# --------------------------------------------------------------------- Fees
+
+class FeeBillingTests(TestCase):
+    """The invoice run, and the rule the whole thing is built around: running
+    it twice must not bill anybody twice."""
+
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        self.tuition = FeeHead.objects.create(name="Tuition")
+        self.exam = FeeHead.objects.create(name="Exam")
+        self.structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=1,
+            due_days=30, late_fine_per_day=Decimal('50.00'))
+        # A paisa amount on purpose: the totals below prove the arithmetic
+        # stays exact rather than drifting through float.
+        FeeStructureItem.objects.create(
+            structure=self.structure, head=self.tuition,
+            amount=Decimal('47500.00'))
+        FeeStructureItem.objects.create(
+            structure=self.structure, head=self.exam, amount=Decimal('2750.50'))
+        self.anil = make_student("Anil", "Adhikari", self.session, self.course)
+        self.bina = make_student("Bina", "Bhandari", self.session, self.course)
+
+    def run_it(self, semester=1):
+        return generate_invoices(self.course, self.session, semester)
+
+    def test_one_invoice_per_student_with_the_structures_lines(self):
+        result = self.run_it()
+        self.assertEqual(len(result['created']), 2)
+        self.assertEqual(result['skipped'], 0)
+        invoice = FeeInvoice.objects.get(student=self.anil)
+        self.assertEqual(invoice.gross, Decimal('50250.50'))
+        self.assertEqual(invoice.balance, Decimal('50250.50'))
+        self.assertEqual(
+            sorted(line.head_name for line in invoice.lines.all()),
+            ["Exam", "Tuition"])
+        self.assertEqual(invoice.due_date, date.today() + timedelta(days=30))
+
+    def test_running_it_again_bills_nobody_twice(self):
+        self.run_it()
+        again = self.run_it()
+        self.assertEqual(len(again['created']), 0)
+        self.assertEqual(again['skipped'], 2)
+        self.assertEqual(FeeInvoice.objects.count(), 2)
+
+    def test_a_new_student_is_picked_up_by_a_re_run(self):
+        self.run_it()
+        chetan = make_student("Chetan", "Chettri", self.session, self.course)
+        again = self.run_it()
+        self.assertEqual(len(again['created']), 1)
+        self.assertEqual(again['skipped'], 2)
+        self.assertTrue(FeeInvoice.objects.filter(student=chetan).exists())
+
+    def test_passed_out_students_are_not_billed(self):
+        self.bina.passed_out = True
+        self.bina.save()
+        result = self.run_it()
+        self.assertEqual(len(result['created']), 1)
+        self.assertFalse(FeeInvoice.objects.filter(student=self.bina).exists())
+
+    def test_a_class_with_no_structure_is_refused_with_a_reason(self):
+        with self.assertRaisesMessage(NothingToBill, "No fee structure exists"):
+            self.run_it(semester=4)
+
+    def test_a_structure_with_no_heads_is_refused(self):
+        self.structure.items.all().delete()
+        with self.assertRaisesMessage(NothingToBill, "no fee heads"):
+            self.run_it()
+
+    def test_issuing_a_bill_notifies_the_student(self):
+        self.run_it()
+        note = NotificationStudent.objects.get(student=self.anil)
+        self.assertIn("Semester 1 bill", note.message)
+        self.assertIn("50250.50", note.message)
+
+    def test_invoice_numbers_are_sequential_and_unique(self):
+        self.run_it()
+        numbers = sorted(FeeInvoice.objects.values_list('number', flat=True))
+        year = date.today().year
+        self.assertEqual(numbers, ["INV-%d-000001" % year,
+                                   "INV-%d-000002" % year])
+
+    def test_editing_the_structure_does_not_rewrite_issued_bills(self):
+        """The reason FeeInvoiceLine snapshots instead of pointing at the
+        structure: a mid-session correction must not change what a student
+        was already told to pay."""
+        self.run_it()
+        item = self.structure.items.get(head=self.tuition)
+        item.amount = Decimal('99999.00')
+        item.save()
+        self.assertEqual(
+            FeeInvoice.objects.get(student=self.anil).gross,
+            Decimal('50250.50'))
+
+
+class FeeAdjustmentTests(TestCase):
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=1)
+        FeeStructureItem.objects.create(
+            structure=structure, head=FeeHead.objects.create(name="Tuition"),
+            amount=Decimal('50000.00'))
+        self.student = make_student("Anil", "Adhikari", self.session,
+                                    self.course)
+        generate_invoices(self.course, self.session, 1)
+        self.invoice = FeeInvoice.objects.get(student=self.student)
+
+    def test_the_kind_decides_the_sign(self):
+        """The form asks for a plain positive number; a scholarship must not
+        depend on the accountant remembering to type a minus."""
+        self.assertEqual(signed_amount(FeeAdjustment.SCHOLARSHIP, 5000),
+                         Decimal('-5000'))
+        self.assertEqual(signed_amount(FeeAdjustment.WAIVER, -5000),
+                         Decimal('-5000'))
+        self.assertEqual(signed_amount(FeeAdjustment.LATE_FINE, 150),
+                         Decimal('150'))
+        # A correction is the one kind that has to go either way.
+        self.assertEqual(signed_amount(FeeAdjustment.CORRECTION, -75),
+                         Decimal('-75'))
+
+    def test_a_scholarship_reduces_the_balance(self):
+        add_adjustment(self.invoice, FeeAdjustment.SCHOLARSHIP, 9500, "Merit")
+        invoice = FeeInvoice.objects.get(pk=self.invoice.pk)
+        self.assertEqual(invoice.payable, Decimal('40500.00'))
+        self.assertEqual(invoice.balance, Decimal('40500.00'))
+
+    def test_adjustments_are_append_only(self):
+        adjustment = add_adjustment(
+            self.invoice, FeeAdjustment.LATE_FINE, 150, "3 days")
+        with self.assertRaises(ValueError):
+            adjustment.save()
+        with self.assertRaises(ValueError):
+            adjustment.delete()
+
+
+class FeePromotionBillingTests(TestCase):
+    def setUp(self):
+        self.admin = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="pw", user_type=1)
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        self.student = make_student("Anil", "Adhikari", self.session,
+                                    self.course)
+
+    def structure_for(self, semester):
+        structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=semester)
+        FeeStructureItem.objects.create(
+            structure=structure,
+            head=FeeHead.objects.get_or_create(name="Tuition")[0],
+            amount=Decimal('50000.00'))
+        return structure
+
+    def promote(self):
+        self.client.force_login(self.admin)
+        return self.client.post(
+            "/api/v1/courses/%d/promote/" % self.course.id,
+            {'from_semester': 1})
+
+    def test_promotion_bills_the_new_semester(self):
+        self.structure_for(2)
+        response = self.promote()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("raised 1 fee invoice", response.data['detail'])
+        self.assertTrue(FeeInvoice.objects.filter(
+            student=self.student, semester=2).exists())
+
+    def test_promotion_still_works_when_no_structure_exists(self):
+        """An academic promotion must not fail on the accounts office's
+        paperwork."""
+        response = self.promote()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("promoted 1 student", response.data['detail'])
+        self.assertNotIn("invoice", response.data['detail'])
+        self.assertEqual(FeeInvoice.objects.count(), 0)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.current_semester, 2)
+
+    def test_a_cohort_missed_at_promotion_is_picked_up_later(self):
+        """bill_active_cohorts sweeps rather than diffing, so writing the
+        structure after the promotion still bills the cohort."""
+        self.promote()
+        self.assertEqual(FeeInvoice.objects.count(), 0)
+        self.structure_for(2)
+        self.assertEqual(bill_active_cohorts(self.course), 1)
+
+
+class FeeApiTests(TestCase):
+    """Who may write the college's fee structures, and who may only look."""
+
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        self.head = FeeHead.objects.create(name="Tuition")
+        self.admin = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="pw", user_type=1)
+        self.accountant_user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", password="pw", user_type=5,
+            first_name="Sabina", last_name="Shrestha")
+        self.student = make_student("Anil", "Adhikari", self.session,
+                                    self.course)
+
+    def structure_payload(self, **overrides):
+        payload = {
+            'course': self.course.id,
+            'session': self.session.id,
+            'semester': 1,
+            'due_days': 30,
+            'items': [{'head': self.head.id, 'amount': '47500.50'}],
+        }
+        payload.update(overrides)
+        return payload
+
+    def post_structure(self):
+        return self.client.post("/api/v1/fees/structures/",
+                                self.structure_payload(),
+                                content_type="application/json")
+
+    def run_invoices(self):
+        return self.client.post("/api/v1/fees/invoice-run/",
+                                {'course': self.course.id,
+                                 'session': self.session.id, 'semester': 1})
+
+    def test_the_accountant_writes_a_structure(self):
+        self.client.force_login(self.accountant_user)
+        response = self.post_structure()
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['total'], Decimal('47500.50'))
+        self.assertEqual(len(response.data['items']), 1)
+
+    def test_the_admin_may_read_structures_but_not_write_them(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        self.client.force_login(self.admin)
+        self.assertEqual(
+            self.client.get("/api/v1/fees/structures/").status_code, 200)
+        response = self.post_structure()
+        self.assertEqual(response.status_code, 403, response.data)
+        self.assertIn("accounts office", response.data['detail'])
+
+    def test_no_other_role_reaches_the_fee_structures(self):
+        for user_type, email in ((2, 'staff@ncit.edu.np'),
+                                 (3, 'stu@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/fees/structures/").status_code, 403,
+                "user_type %s should not see fee structures" % user_type)
+
+    def test_a_second_structure_for_the_same_class_is_refused(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        response = self.post_structure()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already exists", response.data['detail'])
+
+    def test_a_negative_amount_is_refused_with_advice(self):
+        self.client.force_login(self.accountant_user)
+        response = self.client.post(
+            "/api/v1/fees/structures/",
+            self.structure_payload(
+                items=[{'head': self.head.id, 'amount': '-500'}]),
+            content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("scholarship or discount", str(response.data['items']))
+
+    def test_the_invoice_run_is_idempotent_through_the_api(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        first = self.run_invoices()
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(first.data['created'], 1)
+        second = self.run_invoices()
+        self.assertEqual(second.data['created'], 0)
+        self.assertEqual(second.data['skipped'], 1)
+        self.assertEqual(FeeInvoice.objects.count(), 1)
+
+    def test_the_preview_says_who_would_be_billed(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        response = self.client.get(
+            "/api/v1/fees/invoice-run/preview/",
+            {'course': self.course.id, 'session': self.session.id,
+             'semester': 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['to_bill']), 1)
+        self.assertEqual(response.data['already_billed'], [])
+        self.assertIsNotNone(response.data['structure'])
+
+    def test_the_preview_warns_when_there_is_no_structure(self):
+        self.client.force_login(self.accountant_user)
+        response = self.client.get(
+            "/api/v1/fees/invoice-run/preview/",
+            {'course': self.course.id, 'session': self.session.id,
+             'semester': 3})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data['structure'])
+
+    def test_an_adjustment_needs_a_reason(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        self.run_invoices()
+        invoice = FeeInvoice.objects.get()
+        response = self.client.post(
+            "/api/v1/fees/invoices/%d/adjust/" % invoice.id,
+            {'kind': FeeAdjustment.SCHOLARSHIP, 'amount': '5000'})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('reason', response.data)
+
+    def test_an_adjustment_records_who_made_it(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        self.run_invoices()
+        invoice = FeeInvoice.objects.get()
+        response = self.client.post(
+            "/api/v1/fees/invoices/%d/adjust/" % invoice.id,
+            {'kind': FeeAdjustment.SCHOLARSHIP, 'amount': '5000',
+             'reason': 'Merit scholarship'})
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['payable'], Decimal('42500.50'))
+        adjustment = response.data['adjustments'][0]
+        self.assertEqual(adjustment['amount'], Decimal('-5000.00'))
+        self.assertEqual(adjustment['created_by_name'], "Sabina Shrestha")
+
+    def test_cancelling_needs_a_reason_and_clears_the_debt(self):
+        self.client.force_login(self.accountant_user)
+        self.post_structure()
+        self.run_invoices()
+        invoice = FeeInvoice.objects.get()
+        self.assertEqual(
+            self.client.post(
+                "/api/v1/fees/invoices/%d/cancel/" % invoice.id).status_code,
+            400)
+        response = self.client.post(
+            "/api/v1/fees/invoices/%d/cancel/" % invoice.id,
+            {'reason': 'Raised against the wrong cohort'})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], FeeInvoice.CANCELLED)
+        # ...and a cancelled bill is no longer money the college is owed.
+        self.assertFalse(
+            FeeInvoice.objects.outstanding().filter(pk=invoice.pk).exists())
+
+
+class StudentFeeViewTests(TestCase):
+    """What a student can see of their own fees — and, more to the point,
+    what they can see of somebody else's."""
+
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=1, due_days=30)
+        FeeStructureItem.objects.create(
+            structure=structure, head=FeeHead.objects.create(name="Tuition"),
+            amount=Decimal('50000.00'))
+        self.anil = make_student("Anil", "Adhikari", self.session, self.course)
+        self.bina = make_student("Bina", "Bhandari", self.session, self.course)
+        generate_invoices(self.course, self.session, 1)
+        self.anil_invoice = FeeInvoice.objects.get(student=self.anil)
+        self.bina_invoice = FeeInvoice.objects.get(student=self.bina)
+
+    def login_as(self, student):
+        self.client.force_login(student.admin)
+
+    def test_a_student_sees_their_own_position(self):
+        self.login_as(self.anil)
+        response = self.client.get("/api/v1/fees/mine/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['outstanding_total'],
+                         Decimal('50000.00'))
+        self.assertEqual(len(response.data['invoices']), 1)
+        self.assertEqual(response.data['invoices'][0]['number'],
+                         self.anil_invoice.number)
+
+    def test_a_student_cannot_open_another_students_bill(self):
+        """Scoped by owner rather than checked after lookup, so somebody
+        else's invoice is a 404 — there is no reason to confirm it exists."""
+        self.login_as(self.anil)
+        response = self.client.get(
+            "/api/v1/fees/mine/%d/" % self.bina_invoice.id)
+        self.assertEqual(response.status_code, 404)
+
+    def test_the_students_own_bill_opens(self):
+        self.login_as(self.anil)
+        response = self.client.get(
+            "/api/v1/fees/mine/%d/" % self.anil_invoice.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['lines']), 1)
+        self.assertEqual(response.data['lines'][0]['head_name'], "Tuition")
+
+    def test_the_students_view_never_leaks_the_office_fields(self):
+        """fee_invoice_dict's for_office half carries other people's contact
+        details; the student's own view has no use for any of it."""
+        self.login_as(self.anil)
+        data = self.client.get("/api/v1/fees/mine/").data
+        self.assertNotIn('student_email', data['invoices'][0])
+        self.assertNotIn('student_name', data['invoices'][0])
+
+    def test_a_scholarship_shows_on_the_students_own_bill(self):
+        add_adjustment(self.anil_invoice, FeeAdjustment.SCHOLARSHIP, 9500,
+                       "Merit")
+        self.login_as(self.anil)
+        data = self.client.get(
+            "/api/v1/fees/mine/%d/" % self.anil_invoice.id).data
+        self.assertEqual(data['payable'], Decimal('40500.00'))
+        self.assertEqual(data['adjustments'][0]['reason'], "Merit")
+
+    def test_a_cancelled_bill_stays_visible_but_owes_nothing(self):
+        """A student who was told they owed something deserves to see it was
+        withdrawn, rather than watching it vanish."""
+        self.anil_invoice.cancelled_at = timezone.now()
+        self.anil_invoice.cancel_reason = "Billed in error"
+        self.anil_invoice.save()
+        self.login_as(self.anil)
+        data = self.client.get("/api/v1/fees/mine/").data
+        self.assertEqual(len(data['invoices']), 1)
+        self.assertEqual(data['invoices'][0]['status'], FeeInvoice.CANCELLED)
+        self.assertEqual(data['outstanding_total'], Decimal('0.00'))
+
+    def test_no_other_role_reaches_the_student_fee_endpoints(self):
+        for user_type, email in ((1, 'hod@ncit.edu.np'),
+                                 (2, 'staff@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np'),
+                                 (5, 'acc@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/fees/mine/").status_code, 403,
+                "user_type %s should not reach /fees/mine/" % user_type)
+
+    def test_the_dashboard_warns_without_blocking(self):
+        """The college's decision: fees are a warning, never a gate. The
+        number shows up, and results stay reachable."""
+        self.login_as(self.anil)
+        dashboard = self.client.get("/api/v1/dashboard/student/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.data['fees_outstanding'],
+                         Decimal('50000.00'))
+        # Overdue by nothing yet — the bill has 30 days on it.
+        self.assertEqual(dashboard.data['fees_overdue'], Decimal('0.00'))
+        # ...and nothing is gated behind paying it.
+        self.assertEqual(
+            self.client.get("/api/v1/results/mine/").status_code, 200)
+
+
+class FeeCounterTests(TestCase):
+    """Taking money at the counter.
+
+    The rules here are the ones that stop the ledger disagreeing with the cash
+    box: what may be recorded, by whom, against which bill, and what can never
+    be revised afterwards.
+    """
+
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=1, due_days=30)
+        FeeStructureItem.objects.create(
+            structure=structure, head=FeeHead.objects.create(name="Tuition"),
+            amount=Decimal('50000.00'))
+        self.anil = make_student("Anil", "Adhikari", self.session, self.course)
+        self.bina = make_student("Bina", "Bhandari", self.session, self.course)
+        generate_invoices(self.course, self.session, 1)
+        self.invoice = FeeInvoice.objects.get(student=self.anil)
+        self.bina_invoice = FeeInvoice.objects.get(student=self.bina)
+
+        self.admin = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="pw", user_type=1)
+        self.accountant_user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", password="pw", user_type=5,
+            first_name="Sabina", last_name="Shrestha")
+
+    def collect(self, invoice=None, **data):
+        payload = {'amount': '50000.00', 'mode': FeePayment.CASH}
+        payload.update(data)
+        return self.client.post(
+            "/api/v1/fees/invoices/%d/collect/" % (invoice or self.invoice).id,
+            payload)
+
+    def as_accountant(self):
+        self.client.force_login(self.accountant_user)
+
+    def test_cash_over_the_counter_settles_the_bill(self):
+        self.as_accountant()
+        response = self.collect()
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['payment']['amount'],
+                         Decimal('50000.00'))
+        # Who took the money is snapshotted, not just referenced.
+        self.assertEqual(response.data['payment']['collected_by_name'],
+                         "Sabina Shrestha")
+        self.assertEqual(response.data['invoice']['balance'], Decimal('0.00'))
+        self.assertEqual(response.data['invoice']['status'], FeeInvoice.PAID)
+
+    def test_a_part_payment_leaves_the_rest_owing(self):
+        self.as_accountant()
+        response = self.collect(amount='20000')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['invoice']['paid'], Decimal('20000.00'))
+        self.assertEqual(response.data['invoice']['balance'],
+                         Decimal('30000.00'))
+        self.assertEqual(response.data['invoice']['status'],
+                         FeeInvoice.PARTIAL)
+
+    def test_a_scholarship_lowers_what_the_counter_may_take(self):
+        """The balance the counter is held to is the derived one — lines plus
+        signed adjustments minus payments — not the invoice's face value."""
+        add_adjustment(self.invoice, FeeAdjustment.SCHOLARSHIP, 10000, "Merit")
+        self.as_accountant()
+        too_much = self.collect(amount='45000')
+        self.assertEqual(too_much.status_code, 400)
+        self.assertIn("40000.00", too_much.data['amount'][0])
+        self.assertEqual(self.collect(amount='40000').status_code, 201)
+
+    def test_more_than_the_balance_is_refused(self):
+        """Nearly always a typo, and the college has no concept of a student
+        account carrying a surplus."""
+        self.as_accountant()
+        response = self.collect(amount='50000.01')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("still owed", response.data['amount'][0])
+        self.assertFalse(FeePayment.objects.exists())
+
+    def test_a_settled_bill_takes_no_more_money(self):
+        self.as_accountant()
+        self.collect()
+        again = self.collect(amount='100')
+        self.assertEqual(again.status_code, 400)
+        self.assertIn("already settled", again.data['detail'])
+        self.assertEqual(FeePayment.objects.count(), 1)
+
+    def test_nothing_can_be_taken_against_a_withdrawn_bill(self):
+        self.invoice.cancelled_at = timezone.now()
+        self.invoice.cancel_reason = "Billed in error"
+        self.invoice.save()
+        self.as_accountant()
+        response = self.collect(amount='100')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("withdrawn", response.data['detail'])
+
+    def test_zero_and_nonsense_amounts_are_refused(self):
+        self.as_accountant()
+        for amount in ('0', '-500', '', 'lots'):
+            response = self.collect(amount=amount)
+            self.assertEqual(response.status_code, 400,
+                             "%r should not be collectable" % amount)
+        self.assertFalse(FeePayment.objects.exists())
+
+    def test_the_counter_cannot_type_in_an_online_payment(self):
+        """An online payment exists only because a gateway confirmed it.
+        Letting the desk enter one by hand would put an unverifiable row in
+        the ledger beside the verified ones."""
+        self.as_accountant()
+        response = self.collect(mode=FeePayment.ONLINE)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("gateway", response.data['mode'][0])
+        self.assertFalse(FeePayment.objects.exists())
+
+    def test_a_cheque_or_deposit_needs_its_number(self):
+        self.as_accountant()
+        for mode in (FeePayment.CHEQUE, FeePayment.BANK):
+            bare = self.collect(mode=mode)
+            self.assertEqual(bare.status_code, 400,
+                             "%s should need a reference" % mode)
+            self.assertIn('reference', bare.data)
+        response = self.collect(mode=FeePayment.CHEQUE, reference="0092841")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['payment']['reference'], "0092841")
+
+    def test_a_receipt_cannot_be_dated_in_the_future(self):
+        self.as_accountant()
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        response = self.collect(received_on=tomorrow)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('received_on', response.data)
+
+    def test_the_student_is_told_what_landed_and_what_is_left(self):
+        self.as_accountant()
+        self.collect(amount='20000')
+        message = NotificationStudent.objects.filter(
+            student=self.anil).latest('id').message
+        self.assertIn("20000.00", message)
+        self.assertIn("30000.00", message)
+        self.collect(amount='30000')
+        self.assertIn(
+            "Nothing further is owed",
+            NotificationStudent.objects.filter(
+                student=self.anil).latest('id').message)
+
+    def test_a_receipt_can_never_be_edited_or_deleted(self):
+        self.as_accountant()
+        self.collect()
+        payment = FeePayment.objects.get()
+
+        payment.amount = Decimal('1.00')
+        with self.assertRaises(ValueError):
+            payment.save()
+        with self.assertRaises(ValueError):
+            payment.delete()
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.amount, Decimal('50000.00'))
+
+    def test_receipt_numbers_are_sequential_and_unique(self):
+        self.as_accountant()
+        self.collect(amount='10000')
+        self.collect(invoice=self.bina_invoice, amount='10000')
+        numbers = list(
+            FeePayment.objects.order_by('id').values_list('receipt_no',
+                                                          flat=True))
+        self.assertEqual(len(set(numbers)), 2)
+        self.assertTrue(all(n.startswith("FEE-") for n in numbers), numbers)
+
+    def test_a_settled_bill_drops_off_the_counters_list(self):
+        self.as_accountant()
+        listed = self.client.get("/api/v1/fees/collectable/")
+        self.assertEqual(len(listed.data), 2)
+        self.collect()
+        remaining = self.client.get("/api/v1/fees/collectable/")
+        self.assertEqual([i['id'] for i in remaining.data],
+                         [self.bina_invoice.id])
+
+    def test_the_counter_finds_a_bill_by_name_roll_or_invoice(self):
+        """Whichever of the three the person at the window happens to say."""
+        assign_student_numbers(self.anil)
+        self.as_accountant()
+
+        by_name = self.client.get("/api/v1/fees/collectable/", {'q': "Bina"})
+        self.assertEqual([i['id'] for i in by_name.data],
+                         [self.bina_invoice.id])
+        by_roll = self.client.get("/api/v1/fees/collectable/",
+                                  {'q': self.anil.roll_number})
+        self.assertEqual([i['id'] for i in by_roll.data], [self.invoice.id])
+        by_number = self.client.get("/api/v1/fees/collectable/",
+                                    {'q': self.invoice.number})
+        self.assertEqual([i['id'] for i in by_number.data], [self.invoice.id])
+
+    def test_the_cash_book_totals_what_was_taken(self):
+        self.as_accountant()
+        self.collect(amount='20000')
+        self.collect(invoice=self.bina_invoice, amount='5000',
+                     mode=FeePayment.BANK, reference="DEP-77")
+        book = self.client.get("/api/v1/fees/payments/")
+        self.assertEqual(book.status_code, 200)
+        self.assertEqual(book.data['total'], Decimal('25000.00'))
+        self.assertEqual(len(book.data['payments']), 2)
+        # ...and it narrows by how the money arrived.
+        bank = self.client.get("/api/v1/fees/payments/",
+                               {'mode': FeePayment.BANK})
+        self.assertEqual(bank.data['total'], Decimal('5000.00'))
+
+    def test_the_admin_reads_the_cash_book_but_takes_no_money(self):
+        """The whole reason the accountant is its own role: oversight sees
+        every rupee and moves none of it."""
+        self.as_accountant()
+        self.collect(amount='20000')
+        self.client.force_login(self.admin)
+        self.assertEqual(
+            self.client.get("/api/v1/fees/payments/").status_code, 200)
+        self.assertEqual(
+            self.client.get("/api/v1/fees/collectable/").status_code, 200)
+        refused = self.collect(amount='100')
+        self.assertEqual(refused.status_code, 403, refused.data)
+        self.assertEqual(FeePayment.objects.count(), 1)
+
+    def test_no_other_role_reaches_the_counter(self):
+        for user_type, email in ((2, 'staff@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/fees/collectable/").status_code, 403,
+                "user_type %s should not see the counter" % user_type)
+            self.assertEqual(self.collect(amount='100').status_code, 403)
+        self.client.force_login(self.anil.admin)
+        self.assertEqual(self.collect(amount='100').status_code, 403)
+
+    def test_a_student_sees_their_own_receipt_and_no_other(self):
+        """Scoped by owner, so somebody else's receipt is a 404 rather than a
+        refusal that confirms it exists."""
+        self.as_accountant()
+        mine = self.collect(amount='20000').data['payment']
+        theirs = self.collect(invoice=self.bina_invoice,
+                              amount='20000').data['payment']
+
+        self.client.force_login(self.anil.admin)
+        own = self.client.get("/api/v1/fees/payments/%d/receipt/" % mine['id'])
+        self.assertEqual(own.status_code, 200)
+        self.assertEqual(own.data['receipt_no'], mine['receipt_no'])
+        # The student's copy carries no office fields...
+        self.assertNotIn('student_email', own.data)
+        # ...and their neighbour's receipt does not exist as far as they know.
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/fees/payments/%d/receipt/" % theirs['id']).status_code,
+            404)
+
+    def test_a_student_can_list_every_receipt_they_hold(self):
+        """Across all their bills — the list you want when what you have is a
+        receipt number and no idea which semester it belonged to."""
+        self.as_accountant()
+        first = self.collect(amount='20000').data['payment']
+        second = self.collect(amount='30000').data['payment']
+        # ...and a classmate's receipt, which must not appear below.
+        self.collect(invoice=self.bina_invoice, amount='5000')
+
+        self.client.force_login(self.anil.admin)
+        response = self.client.get("/api/v1/fees/mine/receipts/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            sorted(r['receipt_no'] for r in response.data),
+            sorted([first['receipt_no'], second['receipt_no']]))
+        # Every row can be opened as a printable receipt without a second
+        # lookup for which bill it belongs to.
+        self.assertEqual(response.data[0]['invoice_id'], self.invoice.id)
+
+    def test_a_receipt_shows_up_on_the_students_own_bill(self):
+        self.as_accountant()
+        receipt = self.collect(amount='20000').data['payment']
+        self.client.force_login(self.anil.admin)
+        bill = self.client.get("/api/v1/fees/mine/%d/" % self.invoice.id)
+        self.assertEqual(bill.data['balance'], Decimal('30000.00'))
+        self.assertEqual([p['receipt_no'] for p in bill.data['payments']],
+                         [receipt['receipt_no']])
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix='erp-slip-tests-'))
+class DepositSlipTests(TestCase):
+    """A student's claim to have paid into the bank, and what the office does
+    with it.
+
+    The rule the whole flow turns on: uploading a slip pays nothing. Money
+    only exists in the ledger once somebody at the accounts office has agreed
+    it is in the bank.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        # The uploads are real files under a temporary MEDIA_ROOT; take them
+        # with us rather than leaving slips behind on somebody's disk.
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.session = Session.objects.create(
+            start_year=date(2026, 1, 1), end_year=date(2030, 1, 1))
+        self.course = Course.objects.create(name="BE-IT", code=1, semesters=8)
+        structure = FeeStructure.objects.create(
+            course=self.course, session=self.session, semester=1, due_days=30)
+        FeeStructureItem.objects.create(
+            structure=structure, head=FeeHead.objects.create(name="Tuition"),
+            amount=Decimal('50000.00'))
+        self.anil = make_student("Anil", "Adhikari", self.session, self.course)
+        self.bina = make_student("Bina", "Bhandari", self.session, self.course)
+        generate_invoices(self.course, self.session, 1)
+        self.invoice = FeeInvoice.objects.get(student=self.anil)
+        self.bina_invoice = FeeInvoice.objects.get(student=self.bina)
+
+        self.admin = CustomUser.objects.create_user(
+            email="hod@ncit.edu.np", password="pw", user_type=1)
+        self.accountant_user = CustomUser.objects.create_user(
+            email="accounts@ncit.edu.np", password="pw", user_type=5,
+            first_name="Sabina", last_name="Shrestha")
+
+    # -- helpers ---------------------------------------------------------
+
+    def slip_file(self, name="slip.jpg", content_type="image/jpeg",
+                  size=1024):
+        return SimpleUploadedFile(name, b"x" * size, content_type=content_type)
+
+    def submit(self, invoice=None, student=None, **overrides):
+        """Upload a slip as a student. Multipart, since a file is involved."""
+        self.client.force_login((student or self.anil).admin)
+        payload = {
+            'amount': '50000.00',
+            'deposited_on': date.today().isoformat(),
+            'bank_name': "Nabil Bank",
+            'reference': "DEP-1001",
+            'image': self.slip_file(),
+        }
+        payload.update(overrides)
+        payload = {k: v for k, v in payload.items() if v is not None}
+        return self.client.post(
+            "/api/v1/fees/mine/%d/slips/" % (invoice or self.invoice).id,
+            payload)
+
+    def as_accountant(self):
+        self.client.force_login(self.accountant_user)
+
+    def a_pending_slip(self, **overrides):
+        response = self.submit(**overrides)
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data
+
+    # -- the student's side ----------------------------------------------
+
+    def test_uploading_a_slip_pays_nothing_yet(self):
+        """The point of the whole flow: a claim is not a receipt."""
+        slip = self.a_pending_slip()
+        self.assertEqual(slip['status'], DepositSlip.PENDING)
+        self.assertFalse(FeePayment.objects.exists())
+        self.assertEqual(
+            FeeInvoice.objects.get(pk=self.invoice.pk).balance,
+            Decimal('50000.00'))
+        # Nothing is announced to the student either — the only notification
+        # they have is the one that told them the bill was raised.
+        self.assertEqual(
+            [n.message for n in NotificationStudent.objects.filter(
+                student=self.anil) if 'deposit' in n.message.lower()], [])
+
+    def test_a_student_sees_their_own_slips_and_no_others(self):
+        mine = self.a_pending_slip()
+        self.submit(invoice=self.bina_invoice, student=self.bina)
+
+        self.client.force_login(self.anil.admin)
+        response = self.client.get("/api/v1/fees/mine/slips/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([s['id'] for s in response.data], [mine['id']])
+
+    def test_a_slip_cannot_be_hung_on_somebody_elses_bill(self):
+        response = self.submit(invoice=self.bina_invoice)
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(DepositSlip.objects.exists())
+
+    def test_more_than_the_balance_is_refused(self):
+        response = self.submit(amount='50000.01')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("still owed", response.data['amount'][0])
+
+    def test_a_settled_or_withdrawn_bill_takes_no_slip(self):
+        self.invoice.cancelled_at = timezone.now()
+        self.invoice.cancel_reason = "Billed in error"
+        self.invoice.save()
+        withdrawn = self.submit()
+        self.assertEqual(withdrawn.status_code, 400)
+        self.assertIn("withdrawn", withdrawn.data['detail'])
+
+    def test_the_details_the_office_needs_are_all_required(self):
+        for field, value in (('amount', ''), ('amount', '0'),
+                             ('bank_name', ''), ('reference', ''),
+                             ('deposited_on', '')):
+            response = self.submit(**{field: value})
+            self.assertEqual(response.status_code, 400,
+                             "%s=%r should be refused" % (field, value))
+            self.assertIn(field, response.data)
+
+    def test_a_deposit_cannot_be_dated_in_the_future(self):
+        response = self.submit(
+            deposited_on=(date.today() + timedelta(days=1)).isoformat())
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('deposited_on', response.data)
+
+    def test_only_a_photo_or_a_pdf_is_accepted(self):
+        """The one place in the system where a file arrives from outside the
+        staffroom, so what may be uploaded is deliberately narrow."""
+        missing = self.submit(image=None)
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn('image', missing.data)
+
+        script = self.submit(image=self.slip_file(
+            "slip.svg", content_type="image/svg+xml"))
+        self.assertEqual(script.status_code, 400)
+
+        # A permitted content type does not make a forbidden extension safe.
+        disguised = self.submit(image=self.slip_file(
+            "slip.exe", content_type="image/jpeg"))
+        self.assertEqual(disguised.status_code, 400)
+
+        oversized = self.submit(image=self.slip_file(size=6 * 1024 * 1024))
+        self.assertEqual(oversized.status_code, 400)
+        self.assertIn("5 MB", oversized.data['image'][0])
+
+        self.assertEqual(
+            self.submit(image=self.slip_file("slip.pdf",
+                                             content_type="application/pdf")
+                        ).status_code, 201)
+
+    def test_the_same_slip_cannot_be_submitted_twice(self):
+        """Almost always the upload button pressed twice."""
+        self.a_pending_slip()
+        again = self.submit()
+        self.assertEqual(again.status_code, 400)
+        self.assertIn("already submitted", again.data['detail'])
+        self.assertEqual(DepositSlip.objects.count(), 1)
+
+    def test_a_pending_slip_can_be_withdrawn(self):
+        slip = self.a_pending_slip()
+        response = self.client.delete("/api/v1/fees/mine/slips/%d/"
+                                      % slip['id'])
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(DepositSlip.objects.exists())
+        # ...and the reference is free again afterwards.
+        self.assertEqual(self.submit().status_code, 201)
+
+    def test_a_reviewed_slip_can_no_longer_be_withdrawn(self):
+        slip = self.a_pending_slip()
+        self.as_accountant()
+        self.client.post("/api/v1/fees/slips/%d/verify/" % slip['id'])
+        self.client.force_login(self.anil.admin)
+        response = self.client.delete("/api/v1/fees/mine/slips/%d/"
+                                      % slip['id'])
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(DepositSlip.objects.count(), 1)
+
+    # -- the office's side -----------------------------------------------
+
+    def test_verifying_turns_the_claim_into_a_receipt(self):
+        slip = self.a_pending_slip(amount='20000')
+        self.as_accountant()
+        response = self.client.post("/api/v1/fees/slips/%d/verify/"
+                                    % slip['id'])
+        self.assertEqual(response.status_code, 201, response.data)
+
+        payment = response.data['payment']
+        self.assertEqual(payment['amount'], Decimal('20000.00'))
+        # The receipt records how the money actually arrived, and carries the
+        # slip's own reference so it can be matched to the statement.
+        self.assertEqual(payment['mode'], FeePayment.BANK)
+        self.assertEqual(payment['reference'], "DEP-1001")
+        self.assertEqual(payment['collected_by_name'], "Sabina Shrestha")
+        # Dated when the bank took it, not when the office got round to it.
+        self.assertEqual(payment['received_on'],
+                         slip['deposited_on'])
+
+        self.assertEqual(response.data['slip']['status'], DepositSlip.VERIFIED)
+        self.assertEqual(response.data['slip']['receipt_no'],
+                         payment['receipt_no'])
+        self.assertEqual(
+            FeeInvoice.objects.get(pk=self.invoice.pk).balance,
+            Decimal('30000.00'))
+
+    def test_the_student_is_told_their_deposit_was_verified(self):
+        slip = self.a_pending_slip(amount='20000')
+        self.as_accountant()
+        self.client.post("/api/v1/fees/slips/%d/verify/" % slip['id'])
+        message = NotificationStudent.objects.filter(
+            student=self.anil).latest('id').message
+        self.assertIn("verified", message)
+        self.assertIn("20000.00", message)
+        self.assertIn("30000.00", message)
+
+    def test_the_bank_wins_when_the_amounts_disagree(self):
+        """The desk is reading the statement; the student is reading a
+        photograph."""
+        slip = self.a_pending_slip(amount='20000')
+        self.as_accountant()
+        response = self.client.post(
+            "/api/v1/fees/slips/%d/verify/" % slip['id'], {'amount': '18000'})
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['payment']['amount'],
+                         Decimal('18000.00'))
+        self.assertEqual(
+            FeeInvoice.objects.get(pk=self.invoice.pk).balance,
+            Decimal('32000.00'))
+
+    def test_a_slip_is_credited_once_however_often_verify_is_pressed(self):
+        slip = self.a_pending_slip(amount='20000')
+        self.as_accountant()
+        self.client.post("/api/v1/fees/slips/%d/verify/" % slip['id'])
+        again = self.client.post("/api/v1/fees/slips/%d/verify/" % slip['id'])
+        self.assertEqual(again.status_code, 400)
+        self.assertEqual(FeePayment.objects.count(), 1)
+
+    def test_a_slip_for_a_bill_paid_meanwhile_is_left_for_a_human(self):
+        """Not auto-rejected: the money may well be in the bank, and what to
+        do about it is a judgement for the office."""
+        slip = self.a_pending_slip()
+        self.as_accountant()
+        self.client.post("/api/v1/fees/invoices/%d/collect/" % self.invoice.id,
+                         {'amount': '50000', 'mode': FeePayment.CASH})
+        response = self.client.post("/api/v1/fees/slips/%d/verify/"
+                                    % slip['id'])
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already settled", response.data['detail'])
+        self.assertEqual(
+            DepositSlip.objects.get(pk=slip['id']).status, DepositSlip.PENDING)
+
+    def test_rejecting_needs_a_reason_the_student_can_act_on(self):
+        slip = self.a_pending_slip()
+        self.as_accountant()
+        bare = self.client.post("/api/v1/fees/slips/%d/reject/" % slip['id'])
+        self.assertEqual(bare.status_code, 400)
+        self.assertIn('reason', bare.data)
+
+        response = self.client.post(
+            "/api/v1/fees/slips/%d/reject/" % slip['id'],
+            {'reason': "That reference isn't on the bank statement."})
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], DepositSlip.REJECTED)
+        self.assertEqual(response.data['reviewed_by_name'], "Sabina Shrestha")
+        self.assertFalse(FeePayment.objects.exists())
+        self.assertIn(
+            "bank statement",
+            NotificationStudent.objects.filter(
+                student=self.anil).latest('id').message)
+
+    def test_a_rejected_slip_can_be_corrected_and_resubmitted(self):
+        """The uniqueness rule is scoped to live rows for exactly this."""
+        slip = self.a_pending_slip()
+        self.as_accountant()
+        self.client.post("/api/v1/fees/slips/%d/reject/" % slip['id'],
+                         {'reason': "The photograph is unreadable."})
+        self.assertEqual(self.submit().status_code, 201)
+        self.assertEqual(DepositSlip.objects.count(), 2)
+
+    def test_the_queue_holds_what_the_office_still_owes_an_answer(self):
+        pending = self.a_pending_slip()
+        other = self.submit(invoice=self.bina_invoice, student=self.bina,
+                            reference="DEP-2002")
+        self.as_accountant()
+        self.client.post("/api/v1/fees/slips/%d/reject/" % other.data['id'],
+                         {'reason': "Not on the statement."})
+
+        queue = self.client.get("/api/v1/fees/slips/")
+        self.assertEqual(queue.status_code, 200)
+        self.assertEqual([s['id'] for s in queue.data['slips']],
+                         [pending['id']])
+        self.assertEqual(queue.data['pending_count'], 1)
+        # The desk can see what the bill owes without opening it.
+        self.assertEqual(queue.data['slips'][0]['invoice_balance'],
+                         Decimal('50000.00'))
+        # ...and the history is still reachable for a student who asks.
+        everything = self.client.get("/api/v1/fees/slips/", {'status': 'all'})
+        self.assertEqual(len(everything.data['slips']), 2)
+
+    def test_the_admin_reads_the_queue_but_verifies_nothing(self):
+        slip = self.a_pending_slip()
+        self.client.force_login(self.admin)
+        self.assertEqual(
+            self.client.get("/api/v1/fees/slips/").status_code, 200)
+        for action in ('verify', 'reject'):
+            response = self.client.post(
+                "/api/v1/fees/slips/%d/%s/" % (slip['id'], action),
+                {'reason': 'no'})
+            self.assertEqual(response.status_code, 403,
+                             "the admin should not %s a slip" % action)
+        self.assertFalse(FeePayment.objects.exists())
+        self.assertEqual(
+            DepositSlip.objects.get(pk=slip['id']).status, DepositSlip.PENDING)
+
+    def test_the_office_dashboard_counts_what_is_waiting(self):
+        """A slip nobody looks at is a student who has paid and is still
+        being chased, so the count belongs on the landing page."""
+        self.as_accountant()
+        self.assertEqual(
+            self.client.get("/api/v1/dashboard/accountant/").data[
+                'slips_pending'], 0)
+        slip = self.a_pending_slip()
+        self.as_accountant()
+        self.assertEqual(
+            self.client.get("/api/v1/dashboard/accountant/").data[
+                'slips_pending'], 1)
+        self.client.post("/api/v1/fees/slips/%d/verify/" % slip['id'])
+        self.assertEqual(
+            self.client.get("/api/v1/dashboard/accountant/").data[
+                'slips_pending'], 0)
+
+    def test_no_other_role_reaches_the_slip_queue(self):
+        for user_type, email in ((2, 'staff@ncit.edu.np'),
+                                 (4, 'lib@ncit.edu.np')):
+            user = CustomUser.objects.create_user(
+                email=email, password="pw", user_type=user_type)
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/v1/fees/slips/").status_code, 403,
+                "user_type %s should not see the slip queue" % user_type)
+        self.client.force_login(self.anil.admin)
+        self.assertEqual(
+            self.client.get("/api/v1/fees/slips/").status_code, 403)

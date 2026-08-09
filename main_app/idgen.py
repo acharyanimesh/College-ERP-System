@@ -1,5 +1,6 @@
-"""Issuing of the three identifiers the admin never types in by hand:
-employee IDs, student roll numbers and student registration numbers.
+"""Issuing of the identifiers nobody types in by hand: employee IDs, student
+roll numbers, student registration numbers, and the fee ledger's invoice and
+receipt numbers.
 
     Employee ID           YYNNNN            250001
                           |  |
@@ -21,9 +22,15 @@ employee IDs, student roll numbers and student registration numbers.
                           |    +-------- constant institution code
                           +------------- session start year
 
-Employee IDs cover both staff-room roles: Staff.staff_id and
-Librarian.librarian_id come out of one per-year counter, so no two employees
-can end up carrying the same number.
+    Invoice number        INV-YYYY-NNNNNN   INV-2026-000042
+    Receipt number        FEE-YYYY-NNNNNN   FEE-2026-000042
+                              |    |
+                              |    +------ serial within that year, from 000001
+                              +----------- year the document was raised
+
+Employee IDs cover all three staff-room roles: Staff.staff_id,
+Librarian.librarian_id and Accountant.accountant_id come out of one per-year
+counter, so no two employees can end up carrying the same number.
 
 Employee IDs and registration numbers are drawn from IssuedSequence counters, so
 they are never reused after a deletion — a gap in the sequence is preferable to
@@ -99,26 +106,63 @@ def _sort_key(student):
 def next_employee_id(joining_year=None):
     """Allocate the next free employee ID for `joining_year` (default: today).
 
-    One counter serves both staff-room roles, so a staff member and a
-    librarian hired in the same year never share a number.
+    One counter serves every staff-room role, so a staff member, a librarian
+    and an accountant hired in the same year never share a number.
     """
-    from .models import Librarian, Staff
+    from .models import Accountant, Librarian, Staff
 
     year = joining_year or date.today().year
     prefix = "%02d" % (year % 100)
-    # Highest number visible in either table — only relevant for rows issued
-    # before the counter existed (see _claim_serial).
+    # Highest number visible in any of the tables — only relevant for rows
+    # issued before the counter existed (see _claim_serial).
     in_use = max(
         int(highest[2:]) if highest else 0
         for highest in (
             _highest(Staff.objects.filter(staff_id__startswith=prefix), 'staff_id'),
             _highest(Librarian.objects.filter(librarian_id__startswith=prefix),
                      'librarian_id'),
+            _highest(Accountant.objects.filter(accountant_id__startswith=prefix),
+                     'accountant_id'),
         ))
     serial = _claim_serial("staff:%d" % year, in_use)
     if serial > 9999:
         raise ValueError("All 9999 employee IDs for %d have been issued." % year)
     return "%s%04d" % (prefix, serial)
+
+
+# --------------------------------------------------------------------------
+# Fee invoice and receipt numbers
+# --------------------------------------------------------------------------
+
+def _next_document_number(prefix, counter, on=None):
+    """INV-2026-000042 and friends: a year-scoped serial from IssuedSequence.
+
+    Through the counter rather than "highest number in the table plus one",
+    because a cancelled invoice must not hand its number to the next one —
+    a gap in the register is a question somebody can answer, a reused number
+    is one nobody can.
+    """
+    year = (on or date.today()).year
+    serial = _claim_serial("%s:%d" % (counter, year), 0)
+    if serial > 999999:
+        raise ValueError(
+            "All 999999 %s numbers for %d have been issued." % (counter, year))
+    return "%s-%04d-%06d" % (prefix, year, serial)
+
+
+def next_invoice_number(on=None):
+    """The next fee invoice number, e.g. INV-2026-000042."""
+    return _next_document_number("INV", "fee-invoice", on)
+
+
+def next_receipt_number(on=None):
+    """The next fee receipt number, e.g. FEE-2026-000042.
+
+    Sequential rather than random for the same reason LibraryFine's receipts
+    are: a receipt number gets read out at a counter and copied into a
+    register by hand.
+    """
+    return _next_document_number("FEE", "fee-receipt", on)
 
 
 # --------------------------------------------------------------------------

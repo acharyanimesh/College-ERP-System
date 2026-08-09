@@ -58,6 +58,10 @@ import StudentViewAttendance from "./pages/student/StudentViewAttendance";
 import StudentViewResult from "./pages/student/StudentViewResult";
 import ViewBooks from "./pages/student/ViewBooks";
 import MyBorrowings from "./pages/student/MyBorrowings";
+import MyFees from "./pages/student/MyFees";
+import FeeInvoiceDetail from "./pages/student/FeeInvoiceDetail";
+import MyReceipts from "./pages/student/MyReceipts";
+import ReceiptDetail from "./pages/student/ReceiptDetail";
 import LibrarianDashboard from "./pages/librarian/LibrarianDashboard";
 import BorrowRequests from "./pages/librarian/BorrowRequests";
 import IssuedBooks from "./pages/librarian/IssuedBooks";
@@ -67,6 +71,19 @@ import BookFormPage from "./pages/librarian/BookFormPage";
 import ManageLibrarian from "./pages/admin/librarian/ManageLibrarian";
 import LibrarianFormPage from "./pages/admin/librarian/LibrarianFormPage";
 import LibrarianDetails from "./pages/admin/librarian/LibrarianDetails";
+import ManageAccountant from "./pages/admin/accountant/ManageAccountant";
+import AccountantFormPage from "./pages/admin/accountant/AccountantFormPage";
+import AccountantDetails from "./pages/admin/accountant/AccountantDetails";
+import AccountantDashboard from "./pages/accountant/AccountantDashboard";
+import FeeHeads from "./pages/accountant/FeeHeads";
+import FeeStructures from "./pages/accountant/FeeStructures";
+import FeeStructureFormPage from "./pages/accountant/FeeStructureFormPage";
+import InvoiceRun from "./pages/accountant/InvoiceRun";
+import InvoiceRegister from "./pages/accountant/InvoiceRegister";
+import InvoiceDetail from "./pages/accountant/InvoiceDetail";
+import CollectPayment from "./pages/accountant/CollectPayment";
+import PaymentRegister from "./pages/accountant/PaymentRegister";
+import SlipQueue from "./pages/accountant/SlipQueue";
 
 /** Stand-in until each dashboard/page is converted in Phase 5. */
 function PlaceholderPage() {
@@ -308,6 +325,145 @@ function App() {
             />
             <Route path="/librarian/view/profile/" element={<ProfilePage />} />
 
+            {/* Accountants (admin management) */}
+            <Route
+              path="/accountant/add"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantFormPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/edit/:accountantId"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantFormPage edit />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/manage/"
+              element={
+                <RequireRole types={["1"]}>
+                  <ManageAccountant />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/details/:accountantId"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantDetails />
+                </RequireRole>
+              }
+            />
+
+            {/* Accountant role pages. The dashboard is also open to the admin,
+                whose oversight of the accounts office is read-only — the API
+                enforces that, this only stops the page bouncing them home. */}
+            <Route
+              path="/accountant/home/"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <AccountantDashboard />
+                </RequireRole>
+              }
+            />
+            <Route path="/accountant/view/profile/" element={<ProfilePage />} />
+
+            {/* Fee setup and billing. Writing is accountant-only and the API
+                is what enforces it; the register and invoice detail also open
+                for the admin, whose view of them is read-only. */}
+            <Route
+              path="/accountant/fees/heads/"
+              element={
+                <RequireRole types={["5"]}>
+                  <FeeHeads />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/structures/"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <FeeStructures />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/structures/add"
+              element={
+                <RequireRole types={["5"]}>
+                  <FeeStructureFormPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/structures/edit/:structureId"
+              element={
+                <RequireRole types={["5"]}>
+                  <FeeStructureFormPage edit />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/run/"
+              element={
+                <RequireRole types={["5"]}>
+                  <InvoiceRun />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/invoices/"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <InvoiceRegister />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/invoices/:invoiceId"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <InvoiceDetail />
+                </RequireRole>
+              }
+            />
+
+            {/* The counter. Taking money is accountant-only — the admin has no
+                route in here at all, not even a disabled one, because the
+                whole point of the split is that oversight never touches the
+                cash. The cash book after it is read-only, so the admin does
+                open that. */}
+            <Route
+              path="/accountant/fees/collect/"
+              element={
+                <RequireRole types={["5"]}>
+                  <CollectPayment />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/payments/"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <PaymentRegister />
+                </RequireRole>
+              }
+            />
+            {/* The admin opens the queue but cannot answer anything on it —
+                verifying writes a receipt, and that is accountant-only. */}
+            <Route
+              path="/accountant/fees/slips/"
+              element={
+                <RequireRole types={["5", "1"]}>
+                  <SlipQueue />
+                </RequireRole>
+              }
+            />
+
             {/* Student role pages */}
             <Route path="/student/view/attendance/" element={<StudentViewAttendance />} />
             <Route path="/student/apply/leave/" element={<ApplyLeave role="student" />} />
@@ -315,6 +471,40 @@ function App() {
             <Route path="/student/view/result/" element={<StudentViewResult />} />
             <Route path="/student/viewbooks/" element={<ViewBooks />} />
             <Route path="/student/borrowings/" element={<MyBorrowings />} />
+            <Route
+              path="/student/fees/"
+              element={
+                <RequireRole types={["3"]}>
+                  <MyFees />
+                </RequireRole>
+              }
+            />
+            {/* Deliberately not nested under /student/fees/ — see the note in
+                sidebarMenu.js about the active-link rule. */}
+            <Route
+              path="/student/receipts/"
+              element={
+                <RequireRole types={["3"]}>
+                  <MyReceipts />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/student/receipts/:paymentId"
+              element={
+                <RequireRole types={["3"]}>
+                  <ReceiptDetail />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/student/fees/:invoiceId"
+              element={
+                <RequireRole types={["3"]}>
+                  <FeeInvoiceDetail />
+                </RequireRole>
+              }
+            />
             <Route
               path="/student/view/notification/"
               element={<NotificationsPage role="student" />}

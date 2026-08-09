@@ -39,3 +39,9 @@ dmypy.json
 # Collected static files (collectstatic output)
 /static/
 
+# Uploaded media. Only the .gitkeep is tracked — profile photos and bank
+# deposit slips are people's own documents and have no business in a public
+# repository, whatever db.sqlite3 says about them.
+/media/*
+!/media/.gitkeep
+

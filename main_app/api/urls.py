@@ -2,9 +2,9 @@
 (frontend/src/api/*.js). Mounted at /api/v1/."""
 from django.urls import path
 
-from . import (academics, attendance, auth, books, dashboard, leave_feedback,
-               librarians, library, notifications, profile, results, staff,
-               students)
+from . import (academics, accountants, attendance, auth, books, dashboard,
+               deposits, fees, leave_feedback, librarians, library,
+               notifications, payments, profile, results, staff, students)
 
 urlpatterns = [
     # Auth / session
@@ -31,6 +31,7 @@ urlpatterns = [
     path("dashboard/staff/", dashboard.staff_home),
     path("dashboard/student/", dashboard.student_home),
     path("dashboard/librarian/", dashboard.librarian_home),
+    path("dashboard/accountant/", dashboard.accountant_home),
 
     # Own profile
     path("profile/", profile.profile),
@@ -61,6 +62,12 @@ urlpatterns = [
     path("librarians/<int:librarian_id>/", librarians.librarian_item),
     path("librarians/<int:librarian_id>/resend-verification/",
          librarians.resend_verification),
+
+    # Accountants (admin management)
+    path("accountants/", accountants.accountant_list),
+    path("accountants/<int:accountant_id>/", accountants.accountant_item),
+    path("accountants/<int:accountant_id>/resend-verification/",
+         accountants.resend_verification),
 
     # Academics
     path("courses/", academics.course_list),
@@ -147,4 +154,40 @@ urlpatterns = [
 
     # Library — due-date reminders (same sweep as the scheduled command)
     path("library/reminders/send/", library.send_reminders),
+
+    # Fees — the chart of fee heads and the structures built from them
+    path("fees/heads/", fees.head_list),
+    path("fees/heads/<int:head_id>/", fees.head_item),
+    path("fees/structures/", fees.structure_list),
+    path("fees/structures/<int:structure_id>/", fees.structure_item),
+    path("fees/structures/<int:structure_id>/clone/", fees.clone_structure),
+
+    # Fees — raising the bills
+    path("fees/invoice-run/preview/", fees.invoice_run_preview),
+    path("fees/invoice-run/", fees.invoice_run),
+
+    # Fees — the invoice register
+    path("fees/invoices/", fees.invoice_list),
+    path("fees/invoices/<int:invoice_id>/", fees.invoice_item),
+    path("fees/invoices/<int:invoice_id>/cancel/", fees.cancel_invoice),
+    path("fees/invoices/<int:invoice_id>/adjust/", fees.adjust_invoice),
+
+    # Fees — the student's own view. Scoped to the caller, never by id alone.
+    path("fees/mine/", fees.my_fees),
+    path("fees/mine/receipts/", fees.my_receipts),
+    path("fees/mine/slips/", deposits.my_slips),
+    path("fees/mine/slips/<int:slip_id>/", deposits.withdraw_slip),
+    path("fees/mine/<int:invoice_id>/slips/", deposits.submit_slip),
+    path("fees/mine/<int:invoice_id>/", fees.my_invoice),
+
+    # Fees — taking money at the counter (receipts are append-only)
+    path("fees/collectable/", payments.collectable),
+    path("fees/invoices/<int:invoice_id>/collect/", payments.collect_payment),
+    path("fees/payments/", payments.payment_list),
+    path("fees/payments/<int:payment_id>/receipt/", payments.receipt),
+
+    # Fees — bank deposit slips: a student's claim, and the office's verdict
+    path("fees/slips/", deposits.slip_queue),
+    path("fees/slips/<int:slip_id>/verify/", deposits.verify_slip),
+    path("fees/slips/<int:slip_id>/reject/", deposits.reject_slip),
 ]

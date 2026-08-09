@@ -1,16 +1,18 @@
 import math
-from datetime import date
+from datetime import date, timedelta
 
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from ..models import (Attendance, AttendanceReport, Book, BookRequest, Course,
-                      CourseSubject, LeaveReportStaff, LeaveReportStudent,
+from ..models import (ZERO, Attendance, AttendanceReport, Book, BookRequest,
+                      Course, CourseSubject, DepositSlip, FeeInvoice,
+                      FeePayment, LeaveReportStaff, LeaveReportStudent,
                       NotificationStaff, NotificationStudent, Session, Staff,
                       Student, Subject)
-from .permissions import IsAdmin, IsLibrarian, IsStaff, IsStudent
+from .permissions import (IsAccountantOrAdmin, IsAdmin, IsLibrarian, IsStaff,
+                          IsStudent)
 from .serializers import book_request_dict, course_dict
 
 
@@ -362,6 +364,106 @@ def librarian_home(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAccountantOrAdmin])
+def accountant_home(request):
+    """The accounts office at a glance: what was collected, what is owed, and
+    who is behind.
+
+    Everything that filters on what is owed goes through
+    FeeInvoice.objects.with_totals() — see that method for why a plain Sum
+    over joins would double-count, and models.money() for why a Decimal
+    literal cannot be compared against the result directly.
+    """
+    today = date.today()
+    month_start = today.replace(day=1)
+
+    def _collected(since=None):
+        payments = FeePayment.objects.all()
+        if since is not None:
+            payments = payments.filter(received_on__gte=since)
+        return payments.aggregate(total=Sum('amount'))['total'] or ZERO
+
+    outstanding = FeeInvoice.objects.outstanding()
+    overdue = FeeInvoice.objects.overdue(today)
+
+    # Sums over annotated balances have to happen in Python: `balance_due` is
+    # itself an annotation, and SQL will not aggregate one.
+    outstanding_rows = list(outstanding.select_related(
+        'student__admin', 'student__course', 'course'))
+    overdue_rows = sorted(
+        overdue.select_related('student__admin', 'student__course', 'course'),
+        key=lambda i: i.due_date)
+
+    mode_labels = dict(FeePayment.MODE_CHOICES)
+    by_mode = {}
+    for row in FeePayment.objects.values('mode').annotate(
+            total=Sum('amount'), count=Count('id')):
+        by_mode[row['mode']] = {
+            'mode': row['mode'],
+            'mode_display': mode_labels.get(row['mode'], row['mode']),
+            'total': row['total'] or ZERO,
+            'count': row['count'],
+        }
+
+    recent = FeePayment.objects.select_related(
+        'student__admin', 'invoice')[:8]
+
+    return Response({
+        'collected_today': _collected(today),
+        'collected_this_month': _collected(month_start),
+        'collected_all_time': _collected(),
+        'outstanding_total': sum((i.total_balance for i in outstanding_rows), ZERO),
+        'outstanding_count': len(outstanding_rows),
+        'overdue_total': sum((i.total_balance for i in overdue_rows), ZERO),
+        'overdue_count': len(overdue_rows),
+        'invoices_total': FeeInvoice.objects.count(),
+        'students_in_arrears': len({i.student_id for i in overdue_rows}),
+        'collection_by_mode': sorted(
+            by_mode.values(), key=lambda m: -m['total']),
+        'due_this_week': [
+            _invoice_summary(i) for i in sorted(
+                (i for i in outstanding_rows
+                 if today <= i.due_date <= today + timedelta(days=7)),
+                key=lambda i: i.due_date)[:8]],
+        'most_overdue': [_invoice_summary(i) for i in overdue_rows[:8]],
+        # Work the office owes an answer on. A deposit slip nobody looks at is
+        # a student who has paid and is still being chased for the money, so
+        # the count belongs on the landing page rather than only on the queue.
+        'slips_pending': DepositSlip.objects.filter(
+            status=DepositSlip.PENDING).count(),
+        'recent_payments': [
+            {
+                'receipt_no': p.receipt_no,
+                'student_name': str(p.student),
+                'invoice_number': p.invoice.number,
+                'amount': p.amount,
+                'mode': p.mode,
+                'mode_display': p.get_mode_display(),
+                'received_on': p.received_on.isoformat(),
+            }
+            for p in recent],
+    })
+
+
+def _invoice_summary(invoice):
+    """One line of an accountant's worklist. Expects an invoice that came out
+    of with_totals(), so the balance is already computed in SQL."""
+    student = invoice.student
+    return {
+        'id': invoice.id,
+        'number': invoice.number,
+        'student_id': student.id,
+        'student_name': str(student),
+        'student_roll': student.roll_number or '',
+        'course': invoice.course.short_name if invoice.course else '—',
+        'semester': invoice.semester,
+        'due_date': invoice.due_date.isoformat(),
+        'days_overdue': invoice.days_overdue,
+        'balance': invoice.total_balance,
+    }
+
+
+@api_view(['GET'])
 @permission_classes([IsStudent])
 def student_home(request):
     """Everything the student dashboard shows is scoped to the semester the
@@ -403,6 +505,17 @@ def student_home(request):
             'teacher_name': str(teacher) if teacher else None,
         })
 
+    # Fees are a warning here, never a gate: the college's decision is that
+    # an unpaid bill does not lock a student out of results or promotion. So
+    # the dashboard's job is simply to make the number impossible to miss.
+    live_invoices = [
+        i for i in FeeInvoice.objects.filter(student=student).prefetch_related(
+            'lines', 'adjustments', 'payments')
+        if not i.is_cancelled and i.balance > ZERO]
+    overdue_invoices = [i for i in live_invoices if i.days_overdue]
+    upcoming = sorted((i for i in live_invoices if not i.days_overdue),
+                      key=lambda i: i.due_date)
+
     return Response({
         'total_attendance': total_attendance,
         'percent_present': percent_present,
@@ -413,4 +526,9 @@ def student_home(request):
         'data_absent': data_absent,
         'data_name': subject_name,
         'course_subjects': course_subjects,
+        'fees_outstanding': sum((i.balance for i in live_invoices), ZERO),
+        'fees_overdue': sum((i.balance for i in overdue_invoices), ZERO),
+        'fees_overdue_count': len(overdue_invoices),
+        'fees_next_due_date': (
+            upcoming[0].due_date.isoformat() if upcoming else None),
     })
