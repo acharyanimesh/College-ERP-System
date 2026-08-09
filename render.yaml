@@ -18,7 +18,11 @@ services:
     # uploaded media below.
     buildCommand: "./build.sh"
     startCommand: "gunicorn college_management_system.wsgi:application"
-    healthCheckPath: /api/v1/auth/me/
+    # No healthCheckPath on purpose. Render treats anything but a 2xx as a
+    # failed deploy, and this API has no unauthenticated 200 to point at:
+    # every route is IsAuthenticated by default, so the obvious candidate
+    # (/api/v1/auth/me/) answers 401 by design. Without the setting Render
+    # just checks that the service binds its port, which is what we want.
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"
