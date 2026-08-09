@@ -6,11 +6,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://college-erp-api.onrender.com/api/:path*"
+      "destination": "https://college-erp-api-c4fs.onrender.com/api/:path*"
     },
     {
       "source": "/media/:path*",
-      "destination": "https://college-erp-api.onrender.com/media/:path*"
+      "destination": "https://college-erp-api-c4fs.onrender.com/media/:path*"
     },
     {
       "source": "/(.*)",
