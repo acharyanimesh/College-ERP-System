@@ -54,12 +54,6 @@ function Layout({ user, onLogout }) {
   const [messages, setMessages] = useState([]);
   const nextMessageId = useRef(1);
 
-  /* --- Theme is now a single fixed brand palette. Clear old dark-mode state. --- */
-  useEffect(() => {
-    document.body.classList.remove("dark-mode");
-    localStorage.removeItem("theme");
-  }, []);
-
   /* --- Sidebar open/collapsed body classes (mobile vs desktop rules) --- */
   useEffect(() => {
     const apply = () => {

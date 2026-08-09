@@ -67,17 +67,25 @@ import BookFormPage from "./pages/librarian/BookFormPage";
 import ManageLibrarian from "./pages/admin/librarian/ManageLibrarian";
 import LibrarianFormPage from "./pages/admin/librarian/LibrarianFormPage";
 import LibrarianDetails from "./pages/admin/librarian/LibrarianDetails";
+import ManageAccountant from "./pages/admin/accountant/ManageAccountant";
+import AccountantFormPage from "./pages/admin/accountant/AccountantFormPage";
+import AccountantDetails from "./pages/admin/accountant/AccountantDetails";
+import AccountantDashboard from "./pages/accountant/AccountantDashboard";
+import CollectFee from "./pages/accountant/CollectFee";
+import Payments from "./pages/accountant/Payments";
+import FeeStructures from "./pages/accountant/FeeStructures";
+import AccountantLibraryFines from "./pages/accountant/LibraryFines";
 
-/** Stand-in until each dashboard/page is converted in Phase 5. */
-function PlaceholderPage() {
-  usePageHeader({ title: "Dashboard" });
+/** Catch-all for URLs no route matches (the app's 404 page). */
+function NotFoundPage() {
+  usePageHeader({ title: "Page not found" });
   return (
     <div className="card">
       <div className="card-body">
-        <h5 className="card-title">Page not converted yet</h5>
+        <h5 className="card-title">Page not found</h5>
         <p className="text-muted mb-0">
-          This screen is still served by the Django templates; it will be
-          migrated here page-by-page.
+          There's nothing at this address. Use the sidebar to get back on
+          track.
         </p>
       </div>
     </div>
@@ -308,6 +316,83 @@ function App() {
             />
             <Route path="/librarian/view/profile/" element={<ProfilePage />} />
 
+            {/* Accountants (admin management) */}
+            <Route
+              path="/accountant/add"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantFormPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/edit/:accountantId"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantFormPage edit />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/manage/"
+              element={
+                <RequireRole types={["1"]}>
+                  <ManageAccountant />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/details/:accountantId"
+              element={
+                <RequireRole types={["1"]}>
+                  <AccountantDetails />
+                </RequireRole>
+              }
+            />
+
+            {/* Accountant role pages */}
+            <Route
+              path="/accountant/home/"
+              element={
+                <RequireRole types={["5"]}>
+                  <AccountantDashboard />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/collect/"
+              element={
+                <RequireRole types={["5"]}>
+                  <CollectFee />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/payments/"
+              element={
+                <RequireRole types={["5"]}>
+                  <Payments />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/fees/"
+              element={
+                <RequireRole types={["5"]}>
+                  <FeeStructures />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/accountant/library-fines/"
+              element={
+                <RequireRole types={["5"]}>
+                  <AccountantLibraryFines />
+                </RequireRole>
+              }
+            />
+            <Route path="/accountant/view/profile/" element={<ProfilePage />} />
+
             {/* Student role pages */}
             <Route path="/student/view/attendance/" element={<StudentViewAttendance />} />
             <Route path="/student/apply/leave/" element={<ApplyLeave role="student" />} />
@@ -327,7 +412,7 @@ function App() {
             />
             <Route path="/staff/home/" element={<StaffDashboard />} />
             <Route path="/student/home/" element={<StudentDashboard />} />
-            <Route path="*" element={<PlaceholderPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

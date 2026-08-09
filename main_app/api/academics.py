@@ -86,9 +86,12 @@ def subject_list(request):
             ) if student else Subject.objects.none()
         course = request.query_params.get('course')
         semester = request.query_params.get('semester')
-        if course:
+        if course and semester:
+            subjects = subjects.filter(
+                coursesubject__course_id=course, coursesubject__semester=semester)
+        elif course:
             subjects = subjects.filter(coursesubject__course_id=course)
-        if semester:
+        elif semester:
             subjects = subjects.filter(coursesubject__semester=semester)
         subjects = subjects.distinct().order_by(Lower('name'))
         return Response([subject_dict(s) for s in subjects])

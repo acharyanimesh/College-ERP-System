@@ -2,9 +2,9 @@
 (frontend/src/api/*.js). Mounted at /api/v1/."""
 from django.urls import path
 
-from . import (academics, attendance, auth, books, dashboard, leave_feedback,
-               librarians, library, notifications, profile, results, staff,
-               students)
+from . import (academics, accountants, attendance, auth, books, dashboard,
+               finance, leave_feedback, librarians, library, notifications,
+               profile, results, staff, students)
 
 urlpatterns = [
     # Auth / session
@@ -31,6 +31,7 @@ urlpatterns = [
     path("dashboard/staff/", dashboard.staff_home),
     path("dashboard/student/", dashboard.student_home),
     path("dashboard/librarian/", dashboard.librarian_home),
+    path("dashboard/accountant/", dashboard.accountant_home),
 
     # Own profile
     path("profile/", profile.profile),
@@ -61,6 +62,19 @@ urlpatterns = [
     path("librarians/<int:librarian_id>/", librarians.librarian_item),
     path("librarians/<int:librarian_id>/resend-verification/",
          librarians.resend_verification),
+
+    # Accountants (admin management)
+    path("accountants/", accountants.accountant_list),
+    path("accountants/<int:accountant_id>/", accountants.accountant_item),
+    path("accountants/<int:accountant_id>/resend-verification/",
+         accountants.resend_verification),
+
+    # Finance (accountant desk: fee price list, dues, receipts)
+    path("finance/fee-structures/", finance.fee_structures),
+    path("finance/student-fees/", finance.student_fees),
+    path("finance/student-fees/<int:student_id>/", finance.student_fee_detail),
+    path("finance/payments/", finance.payments),
+    path("finance/library-fines/", finance.library_fines),
 
     # Academics
     path("courses/", academics.course_list),

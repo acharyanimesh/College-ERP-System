@@ -7,6 +7,7 @@ const ROLE_LABELS = {
   2: "Staff Member",
   3: "Student",
   4: "Librarian",
+  5: "Accountant",
 };
 
 /** Replicates the template's active rule: exact path match OR any extra substring. */

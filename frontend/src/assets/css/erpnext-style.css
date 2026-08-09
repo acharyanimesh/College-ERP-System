@@ -212,20 +212,6 @@ body {
   font-family: var(--font-support);
 }
 
-/* AdminLTE default avatar styling */
-.adminlte-default-avatar {
-  width: 40px;
-  height: 40px;
-  font-size: 35px;
-  color: #6c757d;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background-color: #f8f9fa;
-  border: 2px solid #e9ecef;
-}
-
 /* Navigation Menu */
 .nav-section {
   padding: 20px 0;
@@ -557,27 +543,6 @@ body {
   color: #fff;
   background: var(--primary-color);
   border-color: var(--primary-color);
-}
-
-/* Light mode adjustments for small-box icons */
-.small-box .icon {
-  transition: color 0.3s ease;
-}
-
-.small-box.bg-info .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-success .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-danger .icon {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.small-box.bg-primary .icon {
-  color: rgba(255, 255, 255, 0.8);
 }
 
 /* Buttons - ERPNext Style */
@@ -1084,23 +1049,8 @@ body {
   color: #fff !important;
 }
 
-.badge-primary {
-  background-color: var(--primary-color) !important;
-  color: #fff !important;
-}
-
 .badge-secondary {
   background-color: var(--secondary-color) !important;
-  color: #fff !important;
-}
-
-.badge-light {
-  background-color: #f8f9fa !important;
-  color: #212529 !important;
-}
-
-.badge-dark {
-  background-color: #343a40 !important;
   color: #fff !important;
 }
 
@@ -1169,8 +1119,7 @@ body {
   }
   
   /* Form controls on mobile */
-  .form-control,
-  .form-select {
+  .form-control {
     font-size: 16px !important; /* Prevents zoom on iOS */
   }
   
@@ -1237,19 +1186,12 @@ body {
 .mb-2 { margin-bottom: 0.5rem; }
 .mb-3 { margin-bottom: 1rem; }
 .mb-4 { margin-bottom: 1.5rem; }
-.mb-5 { margin-bottom: 3rem; }
-.mt-0 { margin-top: 0; }
 .mt-1 { margin-top: 0.25rem; }
 .mt-2 { margin-top: 0.5rem; }
 .mt-3 { margin-top: 1rem; }
 .mt-4 { margin-top: 1.5rem; }
-.mt-5 { margin-top: 3rem; }
 .p-0 { padding: 0; }
-.p-1 { padding: 0.25rem; }
 .p-2 { padding: 0.5rem; }
-.p-3 { padding: 1rem; }
-.p-4 { padding: 1.5rem; }
-.p-5 { padding: 3rem; }
 
 /* ------------------------------------------------------------------
    Fixed minimal brand refresh: Deep Teal, Verdant, Antique Gold,
@@ -1563,14 +1505,12 @@ body {
 }
 
 .form-label,
-.form-group label,
-.control-label {
+.form-group label {
   color: var(--text-main);
   font-weight: 650;
 }
 
 .form-control,
-.form-select,
 select.form-control,
 textarea.form-control {
   background-color: var(--surface-card, #fdfcf7) !important;
@@ -1580,7 +1520,6 @@ textarea.form-control {
 }
 
 .form-control:focus,
-.form-select:focus,
 select.form-control:focus,
 textarea.form-control:focus {
   border-color: var(--primary-mid) !important;
@@ -1734,7 +1673,6 @@ textarea.form-control:focus {
   letter-spacing: 0 !important;
 }
 
-.badge-primary,
 .badge-info {
   background-color: rgba(14, 78, 76, 0.1) !important;
   color: var(--primary-color) !important;
@@ -1755,8 +1693,7 @@ textarea.form-control:focus {
   color: var(--danger-color) !important;
 }
 
-.badge-secondary,
-.badge-light {
+.badge-secondary {
   background-color: var(--surface-ivory) !important;
   color: var(--text-muted) !important;
 }
@@ -1812,23 +1749,6 @@ textarea.form-control:focus {
   background: var(--surface-card, #fdfcf7);
   border: 1px solid rgba(192, 160, 84, 0.38);
   border-radius: 8px;
-}
-
-.bg-primary,
-.bg-info {
-  background-color: var(--primary-color) !important;
-}
-
-.bg-success {
-  background-color: var(--primary-mid) !important;
-}
-
-.bg-warning {
-  background-color: var(--accent-color) !important;
-}
-
-.bg-danger {
-  background-color: var(--danger-color) !important;
 }
 
 @media (max-width: 768px) {

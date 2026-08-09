@@ -50,6 +50,8 @@ export const ADMIN_MENU = [
       { text: "Passed Out Students", icon: "fas fa-user-graduate", to: "/student/passed-out/", active: ["passed-out"] },
       { text: "Add Librarian", icon: "fas fa-book-reader", to: "/librarian/add" },
       { text: "Manage Librarians", icon: "fas fa-address-book", to: "/librarian/manage/", active: ["/librarian/edit/", "/librarian/details/"] },
+      { text: "Add Accountant", icon: "fas fa-user-tie", to: "/accountant/add" },
+      { text: "Manage Accountants", icon: "fas fa-money-check-alt", to: "/accountant/manage/", active: ["/accountant/edit/", "/accountant/details/"] },
     ],
   },
   {
@@ -175,10 +177,35 @@ export const LIBRARIAN_MENU = [
   },
 ];
 
+export const ACCOUNTANT_MENU = [
+  {
+    title: "Main",
+    items: [
+      { text: "Dashboard", icon: "fas fa-tachometer-alt", to: "/accountant/home/" },
+      { text: "Profile", icon: "fas fa-user-circle", to: "/accountant/view/profile/", navIcon: false },
+    ],
+  },
+  {
+    title: "Fee Collection",
+    items: [
+      { text: "Collect Fee", icon: "fas fa-cash-register", to: "/accountant/collect/" },
+      { text: "Payments", icon: "fas fa-receipt", to: "/accountant/payments/" },
+    ],
+  },
+  {
+    title: "Configuration",
+    items: [
+      { text: "Fee Structure", icon: "fas fa-list-ol", to: "/accountant/fees/" },
+      { text: "Library Fines", icon: "fas fa-book", to: "/accountant/library-fines/" },
+    ],
+  },
+];
+
 export function menuForUserType(userType) {
   const t = String(userType);
   if (t === "1") return ADMIN_MENU;
   if (t === "2") return STAFF_MENU;
   if (t === "4") return LIBRARIAN_MENU;
+  if (t === "5") return ACCOUNTANT_MENU;
   return STUDENT_MENU;
 }

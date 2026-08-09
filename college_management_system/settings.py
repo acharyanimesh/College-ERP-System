@@ -40,7 +40,6 @@ SECRET_KEY = 'f2zx8*lb*em*-*b+!&1lpp&$_9q9kmkar+l3x90do@s(+sr&x7'  # Consider us
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# ALLOWED_HOSTS = ['smswithdjango.herokuapp.com']
 ALLOWED_HOSTS = ['*']  # Not recommended but useful in dev mode
 
 
@@ -119,14 +118,6 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.mysql',
-    #     'NAME': 'django',
-    #     'USER': os.environ.get('DB_USER'),
-    #     'PASSWORD': os.environ.get('DB_PASS'),
-    #     'HOST': '127.0.0.1',
-    #     'PORT': '3307'
-    # }
 }
 
 
@@ -221,10 +212,10 @@ ALLOWED_EMAIL_DOMAINS = [
 STAFF_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
 STUDENT_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
 LIBRARIAN_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
+ACCOUNTANT_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
 
-# Non-manifest storage: Vite already content-hashes the React bundle, and the
-# legacy AdminLTE plugin CSS has broken url() refs the manifest storage
-# rejects at collectstatic time.
+# Non-manifest storage: Vite already content-hashes the React bundle, so
+# Django's hashed-manifest storage would add nothing for the SPA assets.
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 prod_db = dj_database_url.config(conn_max_age=500)

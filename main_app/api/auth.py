@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from ..emails import send_admin_verification_email, send_email_change_verification
 from ..models import CustomUser
 from ..tokens import email_verification_token
-from .permissions import ADMIN, IsAdmin, LIBRARIAN, STAFF, STUDENT
+from .permissions import ACCOUNTANT, ADMIN, IsAdmin, LIBRARIAN, STAFF, STUDENT
 from .serializers import user_dict
 
 # Admin/HOD shares the college's institutional domain with Staff.
@@ -26,11 +26,13 @@ ROLE_EMAIL_DOMAINS = {
     STAFF: settings.STAFF_ALLOWED_EMAIL_DOMAINS,
     STUDENT: settings.STUDENT_ALLOWED_EMAIL_DOMAINS,
     LIBRARIAN: settings.LIBRARIAN_ALLOWED_EMAIL_DOMAINS,
+    ACCOUNTANT: settings.ACCOUNTANT_ALLOWED_EMAIL_DOMAINS,
 }
 # Roles whose email change an admin has to approve before the verification
 # link goes out (Admin/HOD's own changes skip the gate).
-APPROVAL_REQUIRED_ROLES = (STAFF, STUDENT, LIBRARIAN)
-ROLE_LABELS = {STAFF: 'Staff', STUDENT: 'Student', LIBRARIAN: 'Librarian'}
+APPROVAL_REQUIRED_ROLES = (STAFF, STUDENT, LIBRARIAN, ACCOUNTANT)
+ROLE_LABELS = {STAFF: 'Staff', STUDENT: 'Student', LIBRARIAN: 'Librarian',
+               ACCOUNTANT: 'Accountant'}
 
 # Same domain-bound key doLogin used.
 CAPTCHA_SECRET = "6LfTGD4qAAAAALtlli02bIM2MGi_V0cUYrmzGEGd"
