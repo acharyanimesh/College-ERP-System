@@ -67,7 +67,10 @@ def staff_list(request):
 
 
 def _assignments_for(staff):
-    """Teaching assignments like hod_views.staff_details builds them."""
+    """Teaching assignments like hod_views.staff_details builds them.
+
+    cs_id and the per-shift 'mine' flags let the Edit Staff page target one
+    slot when unassigning."""
     cs_qs = CourseSubject.objects.filter(
         Q(morning_staff=staff) | Q(day_staff=staff)).select_related(
         'subject', 'course').order_by(Lower('subject__name'))
@@ -79,11 +82,14 @@ def _assignments_for(staff):
         if cs.day_staff_id == staff.id:
             shifts.append('Day')
         assignments.append({
+            'cs_id': cs.id,
             'subject_code': cs.subject.code,
             'subject_name': cs.subject.name,
             'course_name': cs.course.name,
             'course_short_name': cs.course.short_name,
             'semester': cs.semester,
+            'morning_mine': cs.morning_staff_id == staff.id,
+            'day_mine': cs.day_staff_id == staff.id,
             'shifts': ", ".join(shifts),
         })
     return assignments, cs_qs.values('subject').distinct().count()
@@ -139,6 +145,57 @@ def resend_verification(request, staff_id):
         return Response({'detail': "Could not send the email: " + str(e)},
                         status=status.HTTP_400_BAD_REQUEST)
     return Response({'detail': 'Verification email sent.'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdmin])
+def unassign_subject(request, staff_id):
+    """Drop teaching slots this staff member holds (Edit Staff page).
+
+    Body: 'cs_id' limits it to one course-subject — omit it to clear every
+    slot; 'shift' ('morning'/'day') limits it to one shift — omit it for
+    both. Only slots this teacher actually holds are cleared, so a slot that
+    meanwhile went to someone else is never stolen back. Returns the
+    refreshed assignment list so the caller can re-render without a reload.
+    """
+    staff = get_object_or_404(Staff, id=staff_id)
+    shift = request.data.get('shift') or 'both'
+    if shift not in ('morning', 'day', 'both'):
+        return Response({'detail': "shift must be 'morning', 'day' or 'both'."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    rows = CourseSubject.objects.filter(Q(morning_staff=staff) | Q(day_staff=staff))
+    cs_id = request.data.get('cs_id')
+    if cs_id not in (None, ''):
+        try:
+            rows = rows.filter(id=int(cs_id))
+        except (TypeError, ValueError):
+            return Response({'detail': 'cs_id must be a number.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+    cleared = 0
+    with transaction.atomic():
+        for cs in rows:
+            changed = False
+            if shift in ('morning', 'both') and cs.morning_staff_id == staff.id:
+                cs.morning_staff = None
+                changed = True
+            if shift in ('day', 'both') and cs.day_staff_id == staff.id:
+                cs.day_staff = None
+                changed = True
+            if changed:
+                cs.save()
+                cleared += 1
+
+    assignments, subject_count = _assignments_for(staff)
+    detail = ("Unassigned from %d class%s." % (cleared, "" if cleared == 1 else "es")
+              if cleared else "There was nothing to unassign.")
+    return Response({
+        'detail': detail,
+        'cleared': cleared,
+        'assignments': assignments,
+        'subject_count': subject_count,
+    })
 
 
 @api_view(['GET', 'POST'])

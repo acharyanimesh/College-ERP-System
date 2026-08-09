@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import authAPI from "../../../api/auth";
 import staffAPI from "../../../api/staff";
 import { NEPAL_PROVINCES } from "../../../constants/nepal";
@@ -53,26 +53,66 @@ function StaffFormPage({ edit = false }) {
   const [existingPhotoUrl, setExistingPhotoUrl] = useState("");
   const [emailStatus, setEmailStatus] = useState(null);
   const [initialEmail, setInitialEmail] = useState("");
+  const [assignments, setAssignments] = useState([]);
+  const [unassigning, setUnassigning] = useState(false);
 
   useEffect(() => {
     if (!edit) return;
     staffAPI
       .get(staffId)
       .then((s) => {
-        // courses is read-only (derived from subject assignments), not part
-        // of this form's editable fields.
-        const { courses: _courses, ...staffData } = s;
+        // courses and assignments are read-only here (they come from Assign
+        // Subjects), so they stay out of this form's editable fields —
+        // assignments drives the Teaching Assignments table below instead.
+        const {
+          courses: _courses,
+          assignments: _assignments,
+          subject_count: _subjectCount,
+          ...staffData
+        } = s;
         setFields({
           ...EMPTY_STAFF,
           ...staffData,
           profile_pic: null,
           password: "",
         });
+        setAssignments(s.assignments || []);
         setExistingPhotoUrl(s.profile_pic || "");
         setInitialEmail(s.email || "");
       })
       .catch(() => addMessage("Could not load the staff member.", "danger"));
   }, [edit, staffId, addMessage]);
+
+  /**
+   * Free teaching slots straight away (not deferred to Update Staff) — pass
+   * an assignment row to drop one class, or null to drop every one.
+   */
+  const unassign = async (row, shift) => {
+    const where = row
+      ? `${row.subject_name} — ${row.course_short_name}` +
+        (row.semester ? ` Sem ${row.semester}` : "")
+      : "every subject";
+    const which = shift === "both" ? "both shifts" : `the ${shift} shift`;
+    const who = `${fields.first_name} ${fields.last_name}`.trim() || "this teacher";
+    if (!window.confirm(`Unassign ${who} from ${where} (${which})?`)) return;
+
+    setUnassigning(true);
+    try {
+      const res = await staffAPI.unassignSubject(staffId, {
+        cs_id: row ? row.cs_id : undefined,
+        shift,
+      });
+      setAssignments(res.assignments || []);
+      addMessage(res.detail || "Assignment removed.", "success");
+    } catch (err) {
+      addMessage(
+        err.response?.data?.detail || "Could not unassign the teacher.",
+        "danger"
+      );
+    } finally {
+      setUnassigning(false);
+    }
+  };
 
   const setField = (name, value) => {
     setFields((f) => ({ ...f, [name]: value }));
@@ -225,6 +265,94 @@ function StaffFormPage({ edit = false }) {
           </div>
         )}
       </div>
+
+      {edit && (
+        <>
+          <SectionHeading icon="chalkboard-teacher" title="Teaching Assignments" />
+          <p className="text-muted">
+            Slots this teacher currently holds. <strong>Unassign</strong> frees
+            the slot right away — it does not wait for “Update Staff”, and the
+            subject stays put so another teacher can take it.
+          </p>
+          <div className="table-responsive">
+            <table className="table table-bordered table-hover">
+              <thead className="thead-dark">
+                <tr>
+                  <th>#</th>
+                  <th>Code</th>
+                  <th>Subject</th>
+                  <th>Course</th>
+                  <th>Sem</th>
+                  <th>Shift</th>
+                  <th className="text-nowrap">Unassign</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assignments.length ? (
+                  assignments.map((a, i) => (
+                    <tr key={a.cs_id}>
+                      <td>{i + 1}</td>
+                      <td>{a.subject_code || "—"}</td>
+                      <td>{a.subject_name}</td>
+                      <td title={a.course_name}>{a.course_short_name}</td>
+                      <td>{a.semester || "—"}</td>
+                      <td>
+                        <span className="badge badge-secondary">{a.shifts}</span>
+                      </td>
+                      <td className="text-nowrap">
+                        {a.morning_mine && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            disabled={unassigning}
+                            onClick={() => unassign(a, "morning")}
+                          >
+                            Morning
+                          </button>
+                        )}{" "}
+                        {a.day_mine && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            disabled={unassigning}
+                            onClick={() => unassign(a, "day")}
+                          >
+                            Day
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="text-center">
+                      No teaching assignments yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="mb-3">
+            <Link
+              to={`/staff/assign-subjects/${staffId}`}
+              className="btn btn-sm btn-success"
+            >
+              <i className="fas fa-book"></i> Assign Subjects
+            </Link>{" "}
+            {assignments.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-sm btn-danger"
+                disabled={unassigning}
+                onClick={() => unassign(null, "both")}
+              >
+                <i className="fas fa-user-slash"></i> Unassign All Subjects
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       <SectionHeading icon="lock" title="Account Security" />
       {edit ? (

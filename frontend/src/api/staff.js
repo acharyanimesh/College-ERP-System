@@ -46,6 +46,15 @@ const staffAPI = {
   saveSubjectAssignments(staffId, selection) {
     return axiosClient.post(`/staff/${staffId}/subject-assignments/`, selection);
   },
+
+  /**
+   * Free teaching slots this staff member holds (Edit Staff page).
+   * `cs_id` omitted clears every slot; `shift` omitted clears both shifts.
+   * Resolves to { detail, cleared, assignments, subject_count }.
+   */
+  unassignSubject(staffId, { cs_id, shift } = {}) {
+    return axiosClient.post(`/staff/${staffId}/unassign-subject/`, { cs_id, shift });
+  },
 };
 
 export default staffAPI;

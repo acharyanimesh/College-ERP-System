@@ -55,6 +55,7 @@ urlpatterns = [
     path("staff/", staff.staff_list),
     path("staff/<int:staff_id>/", staff.staff_item),
     path("staff/<int:staff_id>/subject-assignments/", staff.subject_assignments),
+    path("staff/<int:staff_id>/unassign-subject/", staff.unassign_subject),
     path("staff/<int:staff_id>/resend-verification/", staff.resend_verification),
 
     # Librarians (admin management)

@@ -121,11 +121,16 @@ def subject_item(request, subject_id):
         course_semesters = []
         for cs in CourseSubject.objects.filter(subject=subject).select_related(
                 'course', 'morning_staff__admin', 'day_staff__admin'):
+            # cs_id + the staff ids let the details page unassign a teacher
+            # from one shift of this class (staff.unassign_subject).
             course_semesters.append({
+                'cs_id': cs.id,
                 'course_name': cs.course.name,
                 'course_short_name': cs.course.short_name,
                 'semester': cs.semester,
+                'morning_staff_id': cs.morning_staff_id,
                 'morning_staff_name': str(cs.morning_staff) if cs.morning_staff else None,
+                'day_staff_id': cs.day_staff_id,
                 'day_staff_name': str(cs.day_staff) if cs.day_staff else None,
             })
         data = subject_dict(subject)
