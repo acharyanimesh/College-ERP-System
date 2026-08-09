@@ -76,20 +76,34 @@ development key and `DEBUG=True`, exactly as before.
    `DATABASE_URL`, `DJANGO_DEBUG` and `RENDER_EXTERNAL_HOSTNAME` are wired up
    by the blueprint — leave them alone.
 
-4. First deploy runs `build.sh`: installs dependencies, `collectstatic`,
-   `migrate`, and then creates your first login from
-   `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD`.
+4. Every deploy runs `build.sh`: installs dependencies, `collectstatic`,
+   `migrate`, then `manage.py bootstrap_admin`, which makes the database
+   match `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD`.
 
-   That last step exists because **Render's Shell is a paid feature** — on
-   the free plan there is no way to run `createsuperuser` by hand, and an
-   empty database would leave you with a working app you cannot log into. It
-   runs once and quietly skips on every later deploy.
+   That command exists because **Render's Shell is a paid feature** — on the
+   free plan nothing can be run by hand. `createsuperuser` was not enough on
+   its own for two reasons: it refuses to run twice, so it can never repair
+   an account, and the account it makes has `email_verified = False`, which
+   sends the administrator to a "confirm your institutional email" screen on
+   first login. On a deployment with no SMTP configured that mail goes to the
+   console — the logs — and the administrator is locked out of their own
+   system by a link they cannot reach.
 
-   `user_type` defaults to `1` (HOD), so this one account is both a Django
-   superuser for `/django-admin/` and the application's own admin in the
-   React app. Once you are in, make a second admin through the UI and delete
-   those two environment variables — a password in a dashboard is a password
-   in a dashboard.
+   `bootstrap_admin` sets the role to HOD, marks the email verified, clears
+   any half-finished email change, and resets the password to the variable.
+   So it is also **the recovery path**: if you are ever locked out, change
+   `DJANGO_SUPERUSER_PASSWORD` and redeploy. Running it repeatedly is normal;
+   it never creates a second administrator.
+
+   That one account is both a Django superuser for `/django-admin/` and the
+   application's own admin in the React app. Once you are in, make a second
+   admin through the UI and delete both variables — a password in a dashboard
+   is a password in a dashboard.
+
+   > Careful: if you change your admin's email **inside the app**, the
+   > address in `DJANGO_SUPERUSER_EMAIL` no longer matches any account, and
+   > the next deploy will create a second administrator under the old
+   > address. Delete the variables, or keep them in step.
 
 5. Check it is alive: `https://<you>.onrender.com/api/v1/auth/me/` should
    answer `401` when logged out. A `401` is success here — it means Django is

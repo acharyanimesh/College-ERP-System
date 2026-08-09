@@ -1864,46 +1864,102 @@ class FeeCounterTests(TestCase):
                          [receipt['receipt_no']])
 
 
-class FirstLoginBootstrapTests(TestCase):
-    """`createsuperuser --no-input`, which build.sh runs on Render.
+class BootstrapAdminTests(TestCase):
+    """`bootstrap_admin`, which build.sh runs on every Render deploy.
 
-    Render's free plan has no shell, so this command is the only way into a
-    freshly deployed database. It runs unattended against a custom user model
-    with email as the username field — worth proving, because the failure
-    mode is a deployed app that nobody can log into.
+    Render's free plan has no shell, so this command is the only way to
+    create or repair the administrator of a deployed instance. Every
+    assertion here corresponds to a way the deployment was actually locked
+    out during setup.
     """
 
-    ENV = {'DJANGO_SUPERUSER_EMAIL': 'hod@ncit.edu.np',
-           'DJANGO_SUPERUSER_PASSWORD': 'not-a-common-password-42'}
+    EMAIL = 'hod@ncit.edu.np'
+    PASSWORD = 'not-a-common-password-42'
+    ENV = {'DJANGO_SUPERUSER_EMAIL': EMAIL,
+           'DJANGO_SUPERUSER_PASSWORD': PASSWORD}
 
-    def test_it_creates_an_admin_who_can_actually_log_in(self):
-        with patch.dict(os.environ, self.ENV):
-            call_command('createsuperuser', interactive=False, verbosity=0)
+    def bootstrap(self, **overrides):
+        env = dict(self.ENV)
+        env.update(overrides)
+        with patch.dict(os.environ, env):
+            call_command('bootstrap_admin', verbosity=0)
 
-        user = CustomUser.objects.get(email='hod@ncit.edu.np')
+    def login(self, email=None, password=None):
+        return self.client.post("/api/v1/auth/login/", {
+            'email': email or self.EMAIL,
+            'password': password or self.PASSWORD})
+
+    def test_it_creates_an_admin_who_can_log_straight_in(self):
+        self.bootstrap()
+
+        user = CustomUser.objects.get(email=self.EMAIL)
         self.assertTrue(user.is_superuser, "needs /django-admin/ access")
-        # user_type defaults to HOD, so the same account is the application's
-        # own admin and not merely a Django superuser...
-        self.assertEqual(str(user.user_type), '1')
-        # ...which means the post_save signal gave it an Admin profile; the
-        # role dashboards go looking for one.
+        self.assertEqual(str(user.user_type), '1', "the app's own admin role")
         self.assertTrue(Admin.objects.filter(admin=user).exists())
 
-        response = self.client.post("/api/v1/auth/login/", self.ENV and {
-            'email': 'hod@ncit.edu.np',
-            'password': 'not-a-common-password-42'})
+        response = self.login()
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['user_type'], '1')
 
-    def test_running_it_twice_is_refused_rather_than_duplicating(self):
-        """build.sh swallows this failure, which is what makes redeploying
-        safe — but the command has to fail rather than reset the password."""
-        with patch.dict(os.environ, self.ENV):
-            call_command('createsuperuser', interactive=False, verbosity=0)
-            with self.assertRaises(CommandError):
-                call_command('createsuperuser', interactive=False, verbosity=0)
-        self.assertEqual(CustomUser.objects.filter(
-            email='hod@ncit.edu.np').count(), 1)
+    def test_the_admin_does_not_have_to_verify_an_email_first(self):
+        """The lockout this command exists for: an unverified admin is sent
+        to a setup screen whose email an unconfigured deployment writes to
+        its own logs."""
+        self.bootstrap()
+        response = self.login()
+        self.assertTrue(response.data['email_verified'])
+        self.assertEqual(response.data['pending_email'], '')
+
+    def test_it_repairs_an_account_that_is_mid_email_change(self):
+        """Exactly the state a half-finished verification leaves behind."""
+        self.bootstrap()
+        stuck = CustomUser.objects.get(email=self.EMAIL)
+        stuck.email_verified = False
+        stuck.pending_email = 'somewhere.else@ncit.edu.np'
+        stuck.save()
+
+        self.bootstrap()
+
+        stuck.refresh_from_db()
+        self.assertTrue(stuck.email_verified)
+        self.assertEqual(stuck.pending_email, '')
+
+    def test_running_it_again_resets_the_password_and_adds_nobody(self):
+        """Redeploying is how a forgotten password gets reset, and it must
+        never quietly accumulate a second administrator."""
+        self.bootstrap()
+        self.bootstrap(DJANGO_SUPERUSER_PASSWORD='a-different-password-99')
+
+        self.assertEqual(
+            CustomUser.objects.filter(email=self.EMAIL).count(), 1)
+        self.assertEqual(self.login().status_code, 400, "old password")
+        self.assertEqual(
+            self.login(password='a-different-password-99').status_code, 200)
+
+    def test_it_promotes_and_verifies_an_existing_account(self):
+        """If the email already belongs to somebody, the environment wins —
+        that is what makes the command a repair and not just a create."""
+        existing = CustomUser.objects.create_user(
+            email=self.EMAIL, password='whatever', user_type=3,
+            first_name="Anil", last_name="Adhikari")
+        existing.is_active = False
+        existing.save()
+
+        self.bootstrap()
+
+        existing.refresh_from_db()
+        self.assertEqual(str(existing.user_type), '1')
+        self.assertTrue(existing.is_active)
+        self.assertTrue(existing.email_verified)
+        self.assertTrue(Admin.objects.filter(admin=existing).exists())
+        self.assertEqual(self.login().status_code, 200)
+
+    def test_it_does_nothing_at_all_without_the_variables(self):
+        """Local development and any already-configured deploy run this with
+        nothing set, and it must not fail the build."""
+        with patch.dict(os.environ, {}, clear=True):
+            call_command('bootstrap_admin', verbosity=0)
+        self.assertFalse(CustomUser.objects.exists())
 
 
 class LoginCaptchaTests(TestCase):
