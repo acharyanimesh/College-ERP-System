@@ -31,17 +31,75 @@ if _env_file.exists():
             os.environ.setdefault(_key.strip(), _value.strip())
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
+def _env_flag(name, default=False):
+    """Read a boolean env var. Anything but the words below is a lie."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'f2zx8*lb*em*-*b+!&1lpp&$_9q9kmkar+l3x90do@s(+sr&x7'  # Consider using your secret key
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def _env_list(name):
+    """Comma-separated env var to a list, blanks dropped."""
+    return [item.strip() for item in os.environ.get(name, '').split(',')
+            if item.strip()]
 
-# ALLOWED_HOSTS = ['smswithdjango.herokuapp.com']
-ALLOWED_HOSTS = ['*']  # Not recommended but useful in dev mode
+
+# DEBUG follows the environment rather than a hardcoded True.
+#
+# The default is derived from whether this looks like a deployment at all: a
+# managed database or Render's own marker means yes, and then DEBUG is off
+# and a real SECRET_KEY is mandatory. A bare `manage.py runserver` or
+# `manage.py test` on a laptop has neither, so it still works with no setup —
+# which is the only reason this isn't simply `default=False`.
+# DJANGO_DEBUG overrides either way, and the Render blueprint sets it
+# explicitly rather than trusting this inference.
+_looks_deployed = bool(os.environ.get('DATABASE_URL')
+                       or os.environ.get('RENDER'))
+DEBUG = _env_flag('DJANGO_DEBUG', default=not _looks_deployed)
+
+# SECURITY WARNING: keep the secret key used in production secret.
+#
+# The old hardcoded key is gone, but it is still in this repository's history
+# and must be treated as public forever. Generate a fresh one for any deployed
+# instance and set it in the host's environment:
+#
+#   python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
+#
+# Development falls back to a fixed throwaway so `runserver` needs no setup;
+# a deployment with DEBUG off has to supply its own or refuse to boot.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY must be set when DEBUG is off. Generate one "
+            "with: python -c \"from django.core.management.utils import "
+            "get_random_secret_key as k; print(k())\"")
+    SECRET_KEY = 'dev-only-insecure-key-do-not-deploy-this'
+
+# Hosts Django will answer to. Render supplies its own external hostname; add
+# any custom domain to DJANGO_ALLOWED_HOSTS as well.
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS')
+_render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if _render_host:
+    ALLOWED_HOSTS.append(_render_host)
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['*']
+
+# Hosts whose forms may POST here. The React app is served from Vercel and
+# reaches this backend through a Vercel rewrite, so the browser's Referer
+# says vercel.app while the Host header says onrender.com — without this,
+# Django 3.1's HTTPS referer check rejects every write.
+# Host format, no scheme: Django 3.1 predates the scheme-qualified list.
+CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
+
+# Render terminates TLS at its proxy and forwards plain HTTP, so without this
+# Django believes every request is insecure: it would refuse to set Secure
+# cookies and would skip the referer check that CSRF_TRUSTED_ORIGINS feeds.
+if _env_flag('DJANGO_BEHIND_TLS_PROXY', default=bool(_render_host)):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -79,15 +137,17 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Directly after SecurityMiddleware, as WhiteNoise requires: a static file
+    # should be answered and returned before session, auth and CSRF do work
+    # that a .css file has no use for. It sat at the bottom of this list
+    # before, which quietly meant every asset paid for all of that first.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    # Third Part Middleware
-    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'college_management_system.urls'
@@ -114,6 +174,12 @@ WSGI_APPLICATION = 'college_management_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
+# SQLite is the development default and is overridden wholesale by
+# DATABASE_URL further down (see the dj_database_url call at the end of this
+# file). A deployed instance MUST set DATABASE_URL: hosts like Render and
+# Vercel give each instance an ephemeral filesystem, so a SQLite file there
+# is silently discarded on the next deploy along with everything written to
+# it.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -132,23 +198,27 @@ DATABASES = {
 
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
-if not DEBUG:
-    AUTH_PASSWORD_VALIDATORS = []
-else:
-    AUTH_PASSWORD_VALIDATORS = [
-        {
-            'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-        },
-        {
-            'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-        },
-        {
-            'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-        },
-        {
-            'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-        },
-    ]
+#
+# These used to be applied only when DEBUG was on, which was harmless while
+# DEBUG was hardcoded True and became a hole the moment it wasn't: a deployed
+# instance would have accepted "1234" as a student's password. They now apply
+# everywhere. Students choose these passwords themselves through the
+# email-verification link, so this is the only thing standing between the
+# college's records and a guessable password.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
 
 
 # Internationalization
@@ -228,5 +298,8 @@ ACCOUNTANT_ALLOWED_EMAIL_DOMAINS = ALLOWED_EMAIL_DOMAINS
 # rejects at collectstatic time.
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+# DATABASE_URL wins over the SQLite default above when it is set, and is a
+# no-op otherwise. Keyed off the URL alone, so switching the deployment's
+# database is an environment change and never a code change.
 prod_db = dj_database_url.config(conn_max_age=500)
 DATABASES['default'].update(prod_db)

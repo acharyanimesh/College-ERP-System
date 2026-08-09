@@ -1,0 +1,65 @@
+# Render blueprint for the Django backend.
+#
+# The React frontend is NOT here — it is built and served by Vercel, which
+# rewrites /api and /media through to this service (see frontend/vercel.json).
+# What this hosts is the API, the uploaded media and Django's own admin.
+#
+# Import it from the Render dashboard: New > Blueprint > point at this repo.
+# Everything marked sync:false has to be filled in by hand, because it is
+# either a secret or a URL that does not exist until the other half is
+# deployed.
+services:
+  - type: web
+    name: college-erp-api
+    runtime: python
+    plan: free
+    # Free instances sleep after ~15 minutes idle and take a while to wake.
+    # That is survivable for a college ERP; it is not survivable for the
+    # uploaded media below.
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn college_management_system.wsgi:application"
+    healthCheckPath: /api/v1/auth/me/
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_DEBUG
+        value: "false"
+      # Generated once by Render and kept. The key hardcoded in this repo's
+      # history is public and must never be reused.
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: college-erp-db
+          property: connectionString
+      # The Vercel domain, e.g. college-erp.vercel.app — no scheme, and no
+      # trailing slash. Django 3.1 wants bare hosts here.
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      # Where verification and password links in emails should point: the
+      # Vercel URL, WITH the scheme. e.g. https://college-erp.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+    # Uploaded files — profile photos and bank deposit slips — live on disk.
+    # Without this they are wiped on every deploy, which for a deposit slip
+    # means the evidence behind a receipt disappears while the receipt
+    # remains. Render disks are a PAID feature; if you stay on the free plan,
+    # move media to object storage instead (see DEPLOYMENT.md).
+    # disk:
+    #   name: media
+    #   mountPath: /opt/render/project/src/media
+    #   sizeGB: 1
+
+databases:
+  - name: college-erp-db
+    plan: free
+    databaseName: college_erp
+    user: college_erp
+    # NOTE: Render's free Postgres expires after 30 days and is then deleted.
+    # Fine for a demo; move to a paid plan or Neon before anyone relies on it.
